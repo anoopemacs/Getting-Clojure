@@ -1,0 +1,6 @@
+# Ignore everything
+/*
+# except for this orgfile
+!Getting_Clojure.org
+# and this file itself
+!.gitignore
