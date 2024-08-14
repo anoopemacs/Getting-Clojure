@@ -1,0 +1,1447 @@
+* Cover
+:PROPERTIES:
+:UNNUMBERED: t
+:END:
+"In the Wild" realworld code examples
+* Hello, Clojure
+** The Very Basics
+#+begin_src clojure
+(println "Hello, World")
+;; => nil
+(str "Clo" "jure")
+;; => "Clojure"
+(str "Hi" 007)
+;; => "Hi7"
+(count "Anoop")
+;; => 5
+(println true)
+;; => nil
+(println false)
+;; => nil
+#+end_src
+
+** Arithmetic
+#+begin_src clojure
+(+ 1900 84)
+;; => 1984
+(* 3.14 3.14)
+;; => 9.8596
+#+end_src
+
+*prefix* notation
+~(<verb> arg1 arg2 ...)~
+** def
+#+begin_src clojure
+(def first-name "Russ")
+;; => #'user/first-name
+#+end_src
+binds a symbol with a value
+
+*all-lower-case-with-words-seperated-by-dashes* convention, aka kebab-case
+** A Function of Your Own
+#+begin_src clojure
+(defn hello-world [] (println "Hello, world!"))
+;; => #'user/hello-world
+(hello-world)
+;; => nil
+#+end_src
+
+#+begin_src clojure
+(defn hello-someone [name]
+  (println "Hello" name))
+;; => #'user/hello-someone
+(hello-someone "Anoop")
+;; => nil
+
+(defn average [a b]
+  (/ (+ a b) 2.0))
+;; => #'user/average
+(average 5 10)
+;; => 7.5
+#+end_src
+** In the Wild
+Created a ~lein~ project called /blottsbooks/ and ran it.
+
+~:gen-class~ means compile this namespace
+
+you need to define a function before you can use it
+therefore, clojure codebases tend to read bottom up
+** Staying out of trouble
+#+begin_src clojure
+(/ 100 0)
+;; => Execution error (ArithmeticException) at user/eval10074 (REPL:70).
+;;    Divide by zero
+(bla 2 3)
+;; => Syntax error compiling at (readme.org:73:1).
+;;    Unable to resolve symbol: bla in this context
+#+end_src
+
+functions are values
+#+begin_src clojure
+hello-world
+;; => #function[user/hello-world]
+#+end_src
+* Vectors and Lists
+** One thing after another
+#+begin_src clojure
+[1 2 3 4]
+;; => [1 2 3 4]
+[1 true "three"]
+;; => [1 true "three"]
+[1 ["hi" "there" 2] 3 println]
+;; => [1 ["hi" "there" 2] 3 #function[clojure.core/println]]
+#+end_src
+** A toolkit of functions for vectors
+#+begin_src clojure
+(vector 1 2 3)
+;; => [1 2 3]
+(vector)
+;; => []
+(def novels ["Emma" "Coma" "War and Peace"])
+;; => #'user/novels
+(count novels)
+;; => 3
+(first novels)
+;; => "Emma"
+(rest novels)
+;; => ("Coma" "War and Peace")
+#+end_src
+~rest~ always returns a /sequence/
+
+#+begin_src clojure
+(def year-books ["1491" "April 1865" "1984" "2001"])
+;; => #'user/year-books
+(def third-book (first (rest (rest year-books))))
+;; => #'user/third-book
+third-book
+;; => "1984"
+
+(nth year-books 2)                      ;zero based index
+;; => "1984"
+(year-books 2)
+;; => "1984"
+#+end_src
+** Growing your vectors
+conj = conjunction
+cons = construct
+#+begin_src clojure
+novels
+;; => ["Emma" "Coma" "War and Peace"]
+(conj novels "Carrie")
+;; => ["Emma" "Coma" "War and Peace" "Carrie"]
+(cons "Carrie" novels)
+;; => ("Carrie" "Emma" "Coma" "War and Peace")
+#+end_src
+** Lists
+#+begin_src clojure
+'(1 2 3)
+;; => (1 2 3)
+'()
+;; => ()
+()
+;; => ()
+#+end_src
+Lists are different from sequences. See Chapter 10.
+
+#+begin_src clojure
+'(1 "two" 3 4.0 [5 "five"])
+;; => (1 "two" 3 4.0 [5 "five"])
+(list 1 2 3)
+;; => (1 2 3)
+(def poems '("Illiad" "Odyssey" "Now we are six"))
+;; => #'user/poems
+(count poems)
+;; => 3
+(first poems)
+;; => "Illiad"
+(rest poems)
+;; => ("Odyssey" "Now we are six")
+(nth poems 2)
+;; => "Now we are six"
+#+end_src
+** Lists vs Vectors
+Vectors behave like arrays.   (But unlike arrays their representation is optimised for easy copy creation to satisfy clojure immutability.)
+Lists are linked list of cons cells
+
+[[xournalpp:lists-vs-vectors.xopp][lists-vs-vectors]]
+
+conj does things keeping efficiency in mind
+#+begin_src clojure
+poems
+;; => ("Illiad" "Odyssey" "Now we are six")
+(conj poems "Jabberwocky")
+;; => ("Jabberwocky" "Illiad" "Odyssey" "Now we are six")
+(def vector-poems ["Illiad" "Odyssey" "Now we are six"])
+;; => #'user/vector-poems
+(conj vector-poems "Jabberwocky")
+;; => ["Illiad" "Odyssey" "Now we are six" "Jabberwocky"]
+#+end_src
+in general, prefer to use vectors over lists
+** Staying out of trouble
+immutability
+#+begin_src clojure
+(def novels ["Emma" "Coma" "War and Peace"])
+;; => #'user/novels
+(conj novels "Jaws")
+;; => ["Emma" "Coma" "War and Peace" "Jaws"]
+novels
+;; => ["Emma" "Coma" "War and Peace"]
+(def more-novels (conj novels "Jaws"))
+;; => #'user/more-novels
+#+end_src
+** In the Wild
+clostache
+pedestal/samples
+* Maps, Keywords and Sets
+** This Goes with That
+map
+#+begin_src clojure
+{"title" "Oliver Twist" "author" "Dickens" "published" 1838}
+;; => {"title" "Oliver Twist", "author" "Dickens", "published" 1838}
+
+(hash-map "title" "Oliver Twist" "author" "Dickens" "published" 1838)
+;; => {"author" "Dickens", "published" 1838, "title" "Oliver Twist"}
+
+(def book {"title" "Oliver Twist" "author" "Dickens" "published" 1838})
+;; => #'user/book
+(get book "published")
+;; => 1838
+(book "published")
+;; => 1838
+#+end_src
+** Keywords
+#+begin_src clojure
+(def book
+  {:title "Oliver Twist" :author "Dickens" :published 1838})
+;; => #'user/book
+(:title book)
+;; => "Oliver Twist"
+#+end_src
+** Changing your Map without changing it
+#+begin_src clojure
+book
+;; => {:title "Oliver Twist", :author "Dickens", :published 1838}
+(assoc book :page-count 362)
+;; => {:title "Oliver Twist",
+;;     :author "Dickens",
+;;     :published 1838,
+;;     :page-count 362}
+book
+;; => {:title "Oliver Twist", :author "Dickens", :published 1838}
+(assoc book :page-count 362 :language "English")
+;; => {:title "Oliver Twist",
+;;     :author "Dickens",
+;;     :published 1838,
+;;     :page-count 362,
+;;     :language "English"}
+(dissoc book :page-count)
+;; => {:title "Oliver Twist", :author "Dickens", :published 1838}
+#+end_src
+
+Vectors can be looked at as maps of keys as 0, 1, 2 ... to respective indexed items of that vector.
+Therefore, assoc and dissoc also work on vectors
+#+begin_src clojure
+(def num0 ["zero" "one" "two" "three"])
+;; => #'user/num0
+(assoc num0 4 "four")
+;; => ["zero" "one" "two" "three" "four"]
+(dissoc num0 0)
+;; => Execution error (ClassCastException) at user/eval10398 (REPL:54).
+;;    class clojure.lang.PersistentVector cannot be cast to class clojure.lang.IPersistentMap (clojure.lang.PersistentVector and clojure.lang.IPersistentMap are in unnamed module of loader 'app')
+#+end_src
+^Doubt: Why isnt ~dissoc~ working on vectors?
+
+#+begin_src clojure
+book
+;; => {:title "Oliver Twist", :author "Dickens", :published 1838}
+(keys book)
+;; => (:title :author :published)
+(vals book)
+;; => ("Oliver Twist" "Dickens" 1838)
+#+end_src
+** Sets
+#+begin_src clojure
+(def genres #{:sci-fi :romance :mystery})
+;; => #'user/genres
+(def authors #{"Dickens" "Austen" "King"})
+;; => #'user/authors
+(def repeats-not-allowed #{"Dickens" "King" "Dickens"})
+;; => Syntax error reading source at (REPL:74:55).
+;;    Duplicate key: Dickens
+#+end_src
+
+Membership
+#+begin_src clojure
+(contains? authors "Austen")
+;; => true
+(contains? genres :bla)
+;; => false
+
+(authors "Austen")
+;; => "Austen"
+(genres :animated)
+;; => nil
+
+(:sci-fi genres)
+;; => :sci-fi
+(:animated genres)
+;; => nil
+
+(def more-authors (conj authors "Clarke"))
+;; => #'user/more-authors
+more-authors
+;; => #{"King" "Dickens" "Clarke" "Austen"}
+(conj more-authors "Clarke")
+;; => #{"King" "Dickens" "Clarke" "Austen"}
+(disj more-authors "King")
+;; => #{"Dickens" "Clarke" "Austen"}
+#+end_src
+** In the wild
+The configuration accepted by clojure.java.jdbc is a map
+The results of db queries are maps
+
+In general, clojure softwares are typically:- maps go in -> maps come out
+
+#+begin_src clojure
+(require 'clojure.java.jdbc)
+;; => Execution error (FileNotFoundException) at user/eval10431 (REPL:112).
+;;    Could not locate clojure/java/jdbc__init.class, clojure/java/jdbc.clj or clojure/java/jdbc.cljc on classpath.
+#+end_src
+
+Membership test using literal set
+#+begin_src clojure
+(def city "Bombay")
+;; => #'user/city
+(#{"Bombay" "Kharagpur" "Madras" "Delhi" "Roorkie" "Guwahati"} city)
+;; => "Bombay"
+
+(def subprotocol "sqlite")
+;; => #'user/subprotocol
+(#{"derby" "h2" "hsqldb" "sqlite"} subprotocol)
+;; => "sqlite"
+#+end_src
+
+boot-clj/boot
+** Staying out of trouble
+tldr: be careful when a map element's value can be ~nil~. Also, when some set element can be ~nil~
+
+#+begin_src clojure
+(def anonymous-book {:title "The Arabian Nights" :author nil})
+;; => #'user/anonymous-book
+(:author anonymous-book)                
+;; => nil
+;;although above returns nil, it doesnt imply that :author key is absent
+(contains? anonymous-book :author)
+;; => true
+#+end_src
+similar pitfall for sets. Be cautious when the set might contain ~nil~
+#+begin_src clojure
+(def possible-authors #{"Austen" "Dickens" nil})
+;; => #'user/possible-authors
+(possible-authors nil)
+;; => nil
+;;although above returns nil, it doesnt mean that my set doesnt contain nil
+(contains? possible-authors nil)
+;; => true
+#+end_src
+
+maps viewed as collection of two element vectors
+#+begin_src clojure
+book
+;; => {:title "Oliver Twist", :author "Dickens", :published 1838}
+(first book)
+;; => [:title "Oliver Twist"]
+(rest book)
+;; => ([:author "Dickens"] [:published 1838])
+(count book)
+;; => 3
+#+end_src
+* Logic
+** The Fundamental if
+#+begin_src clojure
+(defn print-greeting [preferred-customer]
+  (if preferred-customer
+    (println "Welcome back to Blotts Books!")))
+;; => #'user/print-greeting
+(print-greeting true)
+;; => nil
+#+end_src
+
+else
+#+begin_src clojure
+(defn print-greeting [preferred-customer]
+  (if preferred-customer
+    (println "Welcome back to Blotts Books!")
+    (println "Welcome to Blotts Books")))
+;; => #'user/print-greeting
+(defn shipping-charge [preferred-customer order-amount]
+  (if preferred-customer
+    0
+    (* order-amount 0.10)))
+;; => #'user/shipping-charge
+
+#+end_src
+** Asking Questions
+#+begin_src clojure
+(= 1 1)
+;; => true
+(= 2 (+ 1 1))
+;; => true
+(= "Anna Karenina" "Jane Eyre")
+;; => false
+(= "Emma" "Emma")
+;; => true
+(= (+ 2 2) 4 (/ 40 10) (* 2 2) (- 5 1))
+;; => true
+(= 2 3 2)
+;; => false
+#+end_src
+
+#+begin_src clojure
+(not= "Anna Karenina" "Jane Eyre")
+;; => true
+(not= "Anna Karenina" "Anna Karenina")
+;; => false
+#+end_src
+lly ~<~ , ~>~, ~<=~, ~>=~
+
+builtin type predicates
+#+begin_src clojure
+(number? 1984)
+;; => true
+(number? "Anna Karenina")
+;; => false
+(string? "Anna Karenina")
+;; => true
+(keyword? "Anna Karenina")
+;; => false
+(keyword? :anna-karenina)
+;; => true
+(map? :anna-karenina)
+;; => false
+(map? {:title 1984})
+;; => true
+(vector? 1984)
+;; => false
+(vector? [1984])
+;; => true
+#+end_src
+
+~not~, ~or~, ~and~
+#+begin_src clojure
+(defn shipping-surcharge? [preferred-customer express oversized]
+  (and (not preferred-customer) (or express oversized)))
+;; => #'user/shipping-surcharge?
+#+end_src
+** Truthy and Falsy
+Only =false= and =nil= are falsy
+everything else is truthy
+** Do and When
+~do~ is clojure's version of ~progn~ from elisp
+~when~ =  ~if~ + ~do~
+** Dealing with Multiple Conditions
+~cond~
+The bracketing is reduced in comparision with elisp
+#+begin_src clojure
+(defn shipping-charge [preferred-customer order-amount]
+  (cond preferred-customer 0.0
+        (< order-amount 50) 5.0
+        (< order-amount 100) 10
+        (>= order-amount 100) (* order-amount 0.10)))
+;; => #'user/shipping-charge
+#+end_src
+
+~:else~
+#+begin_src clojure
+(defn shipping-charge [preferred-customer order-amount]
+  (cond preferred-customer 0.0
+        (< order-amount 50) 5.0
+        (< order-amount 100) 10
+        :else (* order-amount 0.10)))
+;; => #'user/shipping-charge
+#+end_src
+
+~case~
+#+begin_src clojure
+(defn customer-greeting [status]
+  (case status
+    :gold "Welcome, golden member!!!"
+    :preferred "Welcome back!"
+    "Welcome to Blotts Books"))
+;; => #'user/customer-greeting
+#+end_src
+** Throwing and Catching
+throw, ex-info
+#+begin_src clojure
+(defn publish-book [book]
+  (when (not (:title book))
+    (throw (ex-info "A book needs a title!" {:book book})))
+  ;;...
+  )
+;; => #'user/publish-book
+#+end_src
+^ex-info throws an exception of type clojure.lang.ExceptionInfo
+
+try, catch
+#+begin_src clojure
+(try
+  (publish-book book)
+  (catch ArithmeticException e (println "Math problem."))
+  (catch StackOverflowError e (println "Unable to publish..")))
+;; => nil
+(try
+  (publish-book {:author "Dickens"})
+  (catch ArithmeticException e (println "Math problem."))
+  (catch StackOverflowError e (println "Unable to publish.."))
+  (catch clojure.lang.ExceptionInfo e (println e)))
+;; => nil
+#+end_src
+** In the  wild
+Leiningen
+Korma
+** Staying Out of trouble
+Avoid testing for ~true~ explicitly using ~=~
+Prefer truthy and falsy
+* More capable Functions
+** One Function, different parameters
+Either one or two arguments
+#+begin_src clojure
+(defn greet
+  ([to-whom] (println "Welcome to Blotts Books" to-whom))
+  ([message to-whom] (println message to-whom)))
+;; => #'user/greet
+#+end_src
+
+#+begin_src clojure :results output
+(greet "Dolly")
+(greet "Howdy" "Stranger")
+#+end_src
+
+#+RESULTS:
+| Welcome to Blotts Books Dolly |
+| Howdy Stranger                |
+
+This is called as multi-arity function
+
+How to avoid duplication
+#+begin_src clojure
+(defn greet
+  ([to-whom] (greet "Welcome to Blotts Books" to-whom))
+  ([message to-whom] (println message to-whom)))
+;; => #'user/greet
+#+end_src
+
+#+begin_src clojure :results output
+(greet "Dolly")
+(greet "Howdy" "Stranger")
+#+end_src
+
+#+RESULTS:
+| Welcome to Blotts Books Dolly |
+| Howdy Stranger                |
+** Arguments with Wild Abandon
+arbitrary number of arguments
+#+begin_src clojure
+(defn print-any-args [& args]
+  (println "My arguments are:" args))
+;; => #'user/print-any-args
+
+(defn first-argument [& args]
+  (first args))
+(defn first-argument2 [x & args]
+  x)
+#+end_src
+These are called as var-arg or variadic functions
+** Multimethods
+Vary the method call based on some property of data
+
+Books of various formats
+#+begin_src clojure
+(def book1 {:title "War and Peace" :author "Tolstoy"})
+;; => #'user/book1
+(def book2 {:book "Emma" :by "Austen"})
+;; => #'user/book2
+(def book3 ["1984" "Orwell"])
+;; => #'user/book3
+
+;;normalize book to format {:title ? :author ?}
+(defn normalize-book [book]
+  (if (vector? book)
+    {:title (first book) :author (second book)}
+    (if (contains? book :title)
+      book
+      {:title (:book book) :author (:by book)})))
+;; => #'user/normalize-book
+(normalize-book book1)
+;; => {:title "War and Peace", :author "Tolstoy"}
+(normalize-book book2)
+;; => {:title "Emma", :author "Austen"}
+(normalize-book book3)
+;; => {:title "1984", :author "Orwell"}
+#+end_src
+^above becomes a little messy as we keep adding more book formats
+
+If we had to add a new type of book format, having multimethods will ?enable us to make minimal changes.
+Look into SICP/data-directed programming as to why this is in detail.
+
+dispatch aka type finder function
+#+begin_src clojure
+(defn dispatch-book-format [book]
+  (cond (vector? book) :vector-book
+        (contains? book :title) :standard-map
+        (contains? book :book) :alternative-map))
+;; => #'user/dispatch-book-format
+#+end_src
+
+Now we declare a multi method that uses the above dispatch function
+#+begin_src clojure
+(defmulti normalize-book dispatch-book-format)
+;; => #'user/normalize-book
+#+end_src
+
+implementation of multimethod
+#+begin_src clojure
+(defmethod normalize-book :vector-book [book]
+  {:title (first book) :author (second book)})
+;; => #multifn[normalize-book 0x6aa71187]
+(defmethod normalize-book :standard-map [book]
+  book)
+;; => #multifn[normalize-book 0x6aa71187]
+(defmethod normalize-book :alternative-map [book]
+  {:title (:book book) :author (:by book)})
+;; => #multifn[normalize-book 0x6aa71187]
+#+end_src
+
+#+begin_src clojure
+(normalize-book book1)
+;; => {:title "War and Peace", :author "Tolstoy"}
+(normalize-book book2)
+;; => {:title "Emma", :author "Austen"}
+(normalize-book book3)
+;; => {:title "1984", :author "Orwell"}
+#+end_src
+
+You can supply a method for =:default= that will be called if none of the argument's type matches none of the above.
+
+This is clojure's way of doing Type-based polymorphism found in OOP languages
+** Deeply Recursive
+#+begin_src clojure
+(def books [{:title "Jaws" :copies-sold 2000000}
+            {:title "Emma" :copies-sold 3000000}
+            {:title "2001" :copies-sold 4000000}])
+;; => #'user/books
+(defn sum-copies
+  ([books] (sum-copies books 0))
+  ([books total] (if (empty? books)
+                   total
+                   (sum-copies (rest books) (+ total (:copies-sold (first books)))))))
+;; => #'user/sum-copies
+(sum-copies books)
+;; => 9000000
+#+end_src
+But this can cause stackoverflow, with as little as 4000 books.
+
+Tail call optimization using ~recur~:-
+#+begin_src clojure
+(defn sum-copies
+  ([books] (sum-copies books 0))
+  ([books total]
+   (if (empty? books)
+     total
+     (recur (rest books) (+ total (:copies-sold (first books)))))))
+#+end_src
+All we did is replace the /recursive/ call to ~sum-copies~ with ~recur~
+
+To get rid of needing a new arity just for recursive call, we make use of ~loop~
+#+begin_src clojure
+(defn sum-copies [books]
+  (loop [books books total 0]
+    (if (empty? books)
+      total
+      (recur (rest books) (+ total (:copies-sold (first books)))))))
+#+end_src
+Kinda looks like ~let~ expression
+
+~loop~ works with ~recur~
+Whenever a ~recur~ is hit, the values passed into ~recur~ will be bound to the symbols of the ~loop~, and the ~loop~ expression is evaluated again.
+
+~recur~ with or without loop, is the tool that enables us to re-evaluate some block again and again.
+** Docstrings
+Note that *the arguments list is written after the docstring*
+#+begin_src clojure
+(defn average
+  "Return the average of a and b"
+  [a b]
+  (/ (+ a b) 2.0))
+;; => #'user/average
+#+end_src
+This ordering makes sense:-
+After all, if the docstring were written after the arguments list, it would be treated as an expression inside the function body.
+
+#+begin_src clojure :results output
+(doc average)
+#+end_src
+
+#+RESULTS:
+: -------------------------
+: user/average
+: ([a b])
+:   Return the average of a and b
+
+#+begin_src clojure
+(def pi "The math constant Pi" 3.14)
+;; => #'user/pi
+#+end_src
+
+#+begin_src clojure :results output
+(doc pi)
+#+end_src
+
+#+RESULTS:
+: -------------------------
+: user/pi
+:   The math constant Pi
+** Pre and Post Conditions
+Lets say we want to always ensure a book has a title before publishing
+#+begin_src clojure
+(defn publish-book [book]
+  (when-not (contains? book :title)
+    (throw (ex-info "Books must contain :title" {:book book})))
+  (print-book book)
+  (ship-book book))
+#+end_src
+
+Clojure provides a way to do the above neatly.
+#+begin_src clojure
+(defn publish-book [book]
+  {:pre [(:title book)]}
+  (print-book book)
+  (ship-book book))
+#+end_src
+
+There can be multiple pre conditions
+#+begin_src clojure
+(defn publish-book [book]
+  {:pre [(:title book) (:author book)]}
+  (print-book book)
+  (ship-book book))
+#+end_src
+
+There can be post conditions. The =%= represents /ret/ from the function
+#+begin_src clojure
+(defn publish-book [book]
+  {:pre [(:title book) (:author book)]
+   :post [(boolean? %)]}
+  (print-book book)
+  (ship-book book))
+#+end_src
+
+If any of the conditions are not met, a runtime exception is thrown.
+** Staying out of trouble
+Always leave a space between =&= and =args= when defining variadic functions
+** In the wild
+Implementation of *=*
+Use cider repl and =M-.= to get to this definition.
+[[file:~/.m2/repository/org/clojure/clojure/1.11.3/clojure-1.11.3.jar:clojure/core.clj::(defn =]]
+The =m2= folder is where leiningen stores all project dependencies.
+
+Implementation of the builtin ~to-url~ in clojurescript
+[[file:clojurescript/src/main/clojure/cljs/js_deps.cljc::defmulti to-url class]]
+* Functional Things
+Functions are first class values in clojure
+Clojurists regularly write functions that write other functions.
+** Functions are values
+#+begin_src clojure
+(def dracula {:title "Dracula" :author "Stoker" :price 1.99 :genre :horror})
+;; => #'user/dracula
+#+end_src
+
+#+begin_src clojure
+(defn cheap? [book]
+  (when (<= (:price book) 9.99)
+    book))
+;; => #'user/cheap?
+(defn pricey? [book]
+  (when (> (:price book) 9.99)
+    book))
+;; => #'user/pricey?
+(cheap? dracula)
+;; => {:title "Dracula", :author "Stoker", :price 1.99, :genre :horror}
+(pricey? dracula)
+;; => nil
+#+end_src
+
+#+begin_src clojure
+(defn horror? [book]
+  (when (= (:genre book) :horror)
+    book))
+;; => #'user/horror?
+(defn adventure? [book]
+  (when (= (:genre book) :adventure)))
+;; => #'user/adventure?
+(horror? dracula)
+;; => {:title "Dracula", :author "Stoker", :price 1.99, :genre :horror}
+(adventure? dracula)
+;; => nil
+#+end_src
+
+#+begin_src clojure
+(defn cheap-horror? [book]
+  (when (and (cheap? book) (horror? book))
+    book))
+;; => #'user/cheap-horror?
+(defn pricy-adventure? [book]
+  (when (and (pricey? book) (adventure? book))
+    book))
+;; => #'user/pricy-adventure?
+#+end_src
+
+How can we create such combinations dynamically as need arises:-
+#+begin_src clojure
+(defn both? [first-predicate-f second-predicate-f book]
+  (when (and (first-predicate-f book) (second-predicate-f book))
+    book))
+;; => #'user/both?
+(both? cheap? horror? dracula)
+;; => {:title "Dracula", :author "Stoker", :price 1.99, :genre :horror}
+(both? pricey? adventure? dracula)
+;; => nil
+#+end_src
+** Functions on the fly
++aka lambda functions+
+#+begin_src clojure
+(fn [n] (* 2 n))
+;; => #function[user/eval8013/fn--8014]
+((fn [n] (* 2 n)) 10)
+;; => 20
+
+(defn cheaper-f [max-price]
+  (fn [book]
+    (when (<= (:price book) max-price)
+      book)))
+;; => #'user/cheaper-f
+#+end_src
+cheaper-f is a function that returns another function
+The returned function remembers the specific max-price that was passed during its creation. Also known as /closure/.
+
+#+begin_src clojure
+(def real-cheap? (cheaper-f 1.00))
+;; => #'user/real-cheap?
+(def kind-of-cheap? (cheaper-f 1.99))
+;; => #'user/kind-of-cheap?
+(def marginally-cheap? (cheaper-f 5.99))
+;; => #'user/marginally-cheap?
+
+(real-cheap? dracula)
+;; => nil
+(kind-of-cheap? dracula)
+;; => {:title "Dracula", :author "Stoker", :price 1.99, :genre :horror}
+(marginally-cheap? dracula)
+;; => {:title "Dracula", :author "Stoker", :price 1.99, :genre :horror}
+#+end_src
+
+A function that +manufactures functions such as+ is sister to ~both?~
+#+begin_src clojure
+(defn both-f [predicate-f-1 predicate-f-2]
+  (fn [book]
+    (when (and (predicate-f-1 book) (predicate-f-2 book))
+      book)))
+;; => #'user/both-f
+(def cheap-horror? (both-f cheap? horror?))
+;; => #'user/cheap-horror?
+(cheap-horror? dracula)
+;; => {:title "Dracula", :author "Stoker", :price 1.99, :genre :horror}
+
+(def real-cheap-adventure? (both-f real-cheap? adventure?))
+;; => #'user/real-cheap-adventure?
+(real-cheap-adventure? dracula)
+;; => nil
+
+(def real-cheap-horror? (both-f real-cheap? horror?))
+;; => #'user/real-cheap-horror?
+#+end_src
+
+#+begin_src clojure
+(def cheap-horror-possession? (both-f cheap-horror?
+                                (fn [book] (when (= (:genre book) :possession))
+                                  book)))
+;; => #'user/cheap-horror-possession?
+#+end_src
+** A functional toolkit
+apply
+#+begin_src clojure
+(+ 1 2 3 4)
+;; => 10
+(apply + [1 2 3 4])
+;; => 10
+#+end_src
+
+using ~apply~ to convert from one type to another
+#+begin_src clojure
+(apply str ["One" 2 3 "Four"])
+;; => "One23Four"
+(apply list ["One" 2 3 "Four"])
+;; => ("One" 2 3 "Four")
+(apply vector '("One" 2 3 "Four"))
+;; => ["One" 2 3 "Four"]
+#+end_src
+
+partial
+#+begin_src clojure
+(inc 42)
+;; => 43
+
+(defn my-inc [n] (+ n 1))
+;; => #'user/my-inc
+(my-inc 42)
+;; => 43
+
+(def my-inc2 (partial + 1))
+;; => #'user/my-inc2
+(my-inc2 42)
+;; => 43
+#+end_src
+notice that partial will bind the *first* argument of ~+~ to ~1~
+
+Using ~partial~ to redefine our cheapness predicates
+~partial~ eliminates the need for closure creating functions such as =cheaper-f=
+But it requires a =cheaper-than= helper
+#+begin_src clojure
+(defn cheaper-than [max-price book]
+  (when (<= (:price book) max-price)
+    book))
+;;^notice that we want to keep /max-price/ as the first argument, so that partial can handle it
+
+;; => #'user/cheaper-than
+(def real-cheap? (partial cheaper-than 1.00))
+;; => #'user/real-cheap?
+(def kind-of-cheap? (partial cheaper-than 1.99))
+;; => #'user/kind-of-cheap?
+(def marginally-cheap? (partial cheaper-than 5.99))
+;; => #'user/marginally-cheap?
+#+end_src
+
+~complement~
+#+begin_src clojure
+(defn not-adventure? [book]
+  (when (not (adventure? book))
+    book))
+;; => #'user/not-adventure?
+(not-adventure? dracula)
+;; => {:title "Dracula", :author "Stoker", :price 1.99, :genre :horror}
+
+(defn not-adventure? [book] (not (adventure? book)))
+;; => #'user/not-adventure?
+(not-adventure? dracula)
+;; => {:title "Dracula", :author "Stoker", :price 1.99, :genre :horror}
+
+(def not-adventure? (complement adventure?))
+;; => #'user/not-adventure?
+(not-adventure? dracula)
+;; => true
+#+end_src
+
+~every-pred~ is a builtin variadic version of ~both?~
+#+begin_src clojure
+(def cheap-horror? (every-pred cheap? horror?))
+;; => #'user/cheap-horror?
+
+(def cheap-horror-possession? (every-pred cheap? horror? (fn [book]
+                                                           (when (= (:genre book) :possession)
+                                                             book))))
+;; => #'user/cheap-horror-possession?
+#+end_src
+** Function literals, also called lambdas
+these are even more minimal way of defining functions than ~fn~
+Its format is just =#= followed by the function body wrapped in parenthesis
+
+~adventure?~ using function literal
+#+begin_src clojure
+#(when (= (:genre %1) :adventure) %1)
+
+(#(when (= (:genre %1) :adventure) %1) dracula)
+;; => nil
+#+end_src
+
+double as a function literal
+#+begin_src clojure
+(#(* %1 2) 10)
+;; => 20
+#+end_src
+
+for only one argument, even more minimal syntax is:
+#+begin_src clojure
+(#(* % 2) 10)
+;; => 20
+#+end_src
+** In the wild
+Implementation of ~defn~ using ~def~ and ~fn~
+[[file:~/.m2/repository/org/clojure/clojure/1.11.3/clojure-1.11.3.jar:clojure/core.clj::(def]]
+
+~update~ accepts parameters that are functions
+~update-in~ too
+
+When using Ring, functions as values are extensively used while defining middlewares.
+Two nice example middlewares are given in the textbook
+
+A web application is not something magical. It is just a function.
+*Traditionally, Ring applications call the final, fully middleware wrapped handler function as the app*
+** Staying out of trouble
+Always strive to write pure functions
+* Let
+** A local temporary place for your stuff
+Book store, say, discounts if final bill is more than a set minimum. If not, bill the minimum amount.
+#+begin_src clojure
+(defn compute-discount-amount [amount discount-percent min-charge]
+  (if (> (* amount (- 1.0 discount-percent)) min-charge)
+    (* amount (- 1.0 discount-percent))
+    min-charge))
+#+end_src
+
+Intention revealing naming
+If we used /def/, such a binding would be visible even outside the function
+Because, a /def/ always has global visibility
+
+Also, philosophically, in Clojure, a /def/ is used for binding a global immutable value.
+Think of it as equivalent to /const/ binding in C++
+
+#+begin_src clojure
+(defn compute-discount-amount [amount discount-percent min-charge]
+  (let [discounted-amount (* amount (- 1.0 discount-percent))]
+    (if (> discounted-amount min-charge)
+      discounted-amount
+      min-charge)))
+;; => #'user/compute-discount-amount
+#+end_src
+
+In cloujure, let behaves similar to elisp's let*
+ie bound values are immediately available
+#+begin_src clojure
+(defn compute-discount-amount [amount discount-percent min-charge]
+  (let [discount (* amount discount-percent)
+        discounted-amount (* amount discount)]
+    (if (> discounted-amount min-charge)
+      discounted-amount
+      min-charge)))
+;; => #'user/compute-discount-amount
+#+end_src
+
+
+** Let over Fn
+Say, discount is different for each customer
+#+begin_src clojure
+(def user-discounts {"Nicholas" 0.10 "Jonathan" 0.07 "Felicia" 0.05})
+;; => #'user/user-discounts
+#+end_src
+
+Dumb implementation
+#+begin_src clojure
+(defn compute-discount-amount [amount user-name user-discounts min-charge]
+  (let [discount-percent (user-discounts user-name)
+        discount (* amount discount-percent)
+        discounted-amount (- amount discount)]
+    (if (> discounted-amount min-charge)
+      discounted-amount
+      min-charge)))
+#+end_src
+^The problem with this approach is that:-
+compute-discount-amount is not a pure function
+It is kinda implicit that ~compute-discount-amount~ must be evaluated in an environment where ~user-discounts~ is properly bound.
+
+It might be better to make use of a closure to make sure that above implicitness is gotten rid of.
+ie, it ensures the above environment condition
+#+begin_src clojure
+(defn mk-discount-price-f [user-name user-discounts min-charge]
+  (let [discount-percent (user-discounts user-name)] ;capture this value as a closure for consumption by the ret function
+    (fn [amount]
+      (let [discount (* amount discount-percent)
+            discounted-amount (- amount discount)]
+        (if (> discounted-amount min-charge)
+          discounted-amount
+          min-charge)))))
+;; => #'user/mk-discount-price-f
+#+end_src
+^This is an example of  an Higher-level function (function returning another function) and
+the outer ~let~ and ~fn~ together form a closure
+
+Usage
+#+begin_src clojure
+;; Get a price function for Felicia
+(def compute-felicia-price (mk-discount-price-f "Felicia" user-discounts 10.0))
+;; => #'user/compute-felicia-price
+
+;;...sometime later compute a price when she comes to the store
+(compute-felicia-price 20.0)
+;; => 19.0
+#+end_src
+
+** +Variations on above theme+ ~if-let~
+~if-let~
+#+begin_src clojure
+(def anonymous-book {:title "Sir Gawain and the Green Knight"})
+;; => #'user/anonymous-book
+(def with-author {:title "Once and Future King" :author "White"})
+;; => #'user/with-author
+
+(defn uppercase-author [book]
+  (let [author (:author book)]
+    (if author
+      (.toUpperCase author))))
+;; => #'user/uppercase-author
+(uppercase-author with-author)
+;; => "WHITE"
+(uppercase-author anonymous-book)
+;; => nil
+
+(defn uppercase-author [book]
+  (if-let [author (:author book)]
+    (.toUpperCase author)
+    "ANONYMOUS"))
+;; => #'user/uppercase-author
+(uppercase-author with-author)
+;; => "WHITE"
+(uppercase-author anonymous-book)
+;; => "ANONYMOUS"
+#+end_src
+~if-let~ is a misnomer, it should have been called ~let-if~
+
+There is a ~when-let~ builtin as well
+
+** In the wild
+In Ring:-
+~(defn parse-params~
+~(defn assoc-query-params~
+
+Incanter
+
+** Staying out of trouble
+~let~  follows lexical scope.  Lexical scope means that bindings created by let have a scope limited by the body of the let expression.
+Unlike elisp.
+* Def, Symbols, and Vars
+** A Global, Stable place for your stuff
+def can be used to define global constants
+Global constants are capitalized by convention
+** Symbols are Things
+~def~ binds a symbol to a value
+#+begin_src clojure
+(def author "Austen")
+#+end_src
+The above involes one symbol and one value
+Both of them are first-class and take up bytes in memory
+
+The symbol is ~'author~
+The value is ~"Austen"~
+
+Symbols have a lot in common with keywords.
+** Bindings are Things too
+When you evaluate a def or defn, aka create a binding, Clojure creates a =var=
+#+begin_src clojure
+(def author "Austen")
+;; => #'user/author
+(def title "Emma")
+;; => #'user/title
+(def PI 3.14)
+;; => #'user/PI
+(def book1 {:title title :author author})
+;; => #'user/book1
+(defn book-description [book] (str (:title book) " written by " (:author book)))
+;; => #'user/book-description
+#+end_src
+
+What these^ =var= looks like:-
+[[xournalpp:two-slotted-var.xopp][var has two slots]]
+
+*Sharp-quote* can be used to get a var that created some symbol
+#+begin_src clojure
+;;makes a var:-
+(def author "Austen")
+;; => #'user/author
+
+;;Get above created var:-
+#'author
+;; => #'user/author
+
+(def the-var #'author)
+;; => #'user/the-var
+
+(.get the-var)
+;; => "Austen"
+(.-sym the-var)
+;; => author
+#+end_src
+** Varying Your Vars
+Vars are mutable in Clojure. This is helpful during development.
+But, in production, respect the convention of not changing a var once its defined.
+Aka, never change a once defined ~def~ and  ~defn~
+
+#+begin_src clojure
+;;Make a dynmic-var
+(def ^:dynamic *debug-enabled* false)
+
+(defn debug [msg]
+  (if *debug-enabled*
+    (println msg)))
+
+(binding [*debug-enabled* true]
+  (debug "Calling that bug prone function:-")
+  (some-troublesome-function-that-needs-logging) ;;for this call and all call stacks below it, the dynamic var setting remains ~true~
+  (debug "Back from that bug prone function."))
+#+end_src
+
+~binding~ :- Helps you change a symbol without resorting to the BAD anti-pattern of using ~def~ inside a ~defn~
++symbols+ vars intended to be used in ~binding~ are called dynamic vars
+
+By convention, they are sorrounded by =*=
+They are called as sorrounded by earmuffs
+** Staying out of trouble
+Note:-
+~let~ does not create var
+#+begin_src clojure
+(let [let-bound-symbol 42]
+  #'let-bound-symbol)
+;; => Syntax error compiling var at (readme.org::Def, Symbols, and Vars:67:1).
+;;    Unable to resolve var: let-bound-symbol in this context
+#+end_src
+SICP taught me that ~let~ is just syntactic sugar for a lambda definition and that lambda being called
+** In the wild
+clojure/core.clj file
+clojure/core_print.clj file
+
+~set!~ changes the value of a dynamic-var 'from inside the binding'
+
+=*1=, =*2= and =*3= are dynamic vars with a single earmuff
+They represent the last ret, last to last ret and the third last ret respectively
+
+=*e= represents the last exception
+
+** Wrapping up
+*def creates a var(a Clojure value) which is an association between another Clojure value (a symbol) and a third value*
+
+Dynamic vars are vars that let you swap in a new value while you evaluate an expressin or six
+* Namespaces
+Namespace is the mechanism that Clojure uses to organize vars into related buckets.
+** A place for your vars
+vars live in namespaces
+
+Conceptually, a namespace is just a big lookup table of vars, indexed by their symbols
+*You can visualise a namespace as follows:-*
+[[xournalpp:namespace visualisation.xopp]]
+
+Auto created default namespace is named as 'user'
+However, if =lein repl= is run inside a project, the default namespace is named as '<project_name>.core'
+
+Create a new namespace
+#+begin_src clojure
+(ns pricing)
+;; => nil
+#+end_src
+Notice no quotation of necessary for argument
+
+Above creates and activates that namespace
+#+begin_src clojure
+(def discount-rate 0.15)
+;; => #'pricing/discount-rate
+(defn discount-price [book]
+  (* (- 1.0 discount-rate) (:price book)))
+;; => #'pricing/discount-price
+#+end_src
+
+Switch back to an existing namespace is also done using ~ns~
+#+begin_src clojure
+(ns user)
+;; => nil
+discount-rate
+;; => Syntax error compiling at (Getting_Clojure.org::Namespaces:0:0).
+;;    Unable to resolve symbol: discount-rate in this context
+(ns pricing)
+;; => nil
+discount-rate
+;; => 0.15
+#+end_src
+
+Fully qualified symbol = <ns>/<symbol name>
+Such long name makes a symbol defined in one namespace available in another
+#+begin_src clojure
+(ns user)
+;; => nil
+(pricing/discount-price {:title "Emma" :price 9.99})
+;; => 8.4915
+#+end_src
+** Loading Namespaces using ~require~
+You need to make sure the namespace you want to use is loaded before you try to use it.
+~(require <quoted name>)~
+
+(Aside: We will learn another way to loading namespaces later in this chapter using ~(ns <bla> (:require <unquoted>))~)
+
+Eg: =clojure.data= is a builtin namespace. (The dot is part of the name of this namespace)
+Say, I need to use ~diff~ which is defined in that namespace.
+#+begin_src clojure
+(def literature ["Emma" "Oliver Twist" "Possession"])
+;; => #'user/literature
+(def horror ["It" "Carry" "Possession"])
+;; => #'user/horror
+
+(clojure.data/diff literature horror)
+;; => Execution error (ClassNotFoundException) at java.net.URLClassLoader/findClass (URLClassLoader.java:445).
+;;    clojure.data
+#+end_src
+^Because, namespace not yet loaded
+
+Tell Clojure to read and compile the code behind some namespace:-
+#+begin_src clojure
+(require 'clojure.data)
+;; => nil
+(clojure.data/diff literature horror)
+;; => [["Emma" "Oliver Twist"] ["It" "Carry"] [nil nil "Possession"]]
+#+end_src
+** A namespace of your own
+(From here till 'In the wild' of this chapter, its more convenient to work inside a ~lein repl~)
+
+blottsbooks
+
+Create a file src/blottsbooks/pricing.clj
+This corresponds to the namespace:-
+~(ns blottsbooks.pricing)~
+
+** (~:require~ + As) and Refer
+#+begin_src clojure
+(ns blottsbooks.core
+  (:require [blottsbooks.pricing :as pricing])
+  (:gen-class))
+#+end_src
+
+#+begin_quote repl output
+[anup@imac0 blottsbooks]$ lein repl
+
+blottsbooks.core=> pricing/discount-rate
+0.15
+blottsbooks.core=> pricing/discount-price 
+#object[blottsbooks.pricing$discount_price 0x6d7c552 "blottsbooks.pricing$discount_price@6d7c552"]
+#+end_quote
+
+*^Visualise as:-*
+[[xournalpp:require-visualised.xopp]]
+
+Avoid using ~:refer~ and mostly prefer to using ~:as~
+
+** Namespaces, Symbols and Keywords
+Q: Are namespaces first class citizens in Clojure? Yes!
+Namespaces are just ordinary Clojure values
+Eg:-
+The current namespace is bound to the symbol ~*ns*~  (Recall that earmuffs represent dynamic vars)
+#+begin_src clojure :results output
+(println "Current ns:" *ns*)
+#+end_src
+
+#+RESULTS:
+: Current ns: #namespace[user]
+
+Look up a namespace. Useful to check the existence of some namespace.
+#+begin_src clojure
+(find-ns 'user)
+;; => #namespace[user]
+(find-ns 'doesnt-exist)
+;; => nil
+#+end_src
+
+Map  the things defined in some namespace
+#+begin_src clojure
+(ns-map 'user)
+;; => {primitives-classnames #'clojure.core/primitives-classnames,
+;;     +' #'clojure.core/+',
+;;     Enum java.lang.Enum,
+;;     decimal? #'clojure.core/decimal?,
+;;     restart-agent #'clojure.core/restart-agent,
+;;     sort-by #'clojure.core/sort-by,
+;;     ...,
+;;     refer-clojure #'clojure.core/refer-clojure}
+
+(ns-map 'doesnt-exist)
+;; => Execution error at user/eval10058 (REPL:118).
+;;    No namespace: doesnt-exist found
+
+(namespace 'some-namespace/some-symbol)
+;; => "some-namespace"
+#+end_src
+^(cant be used to check the existence of some namespace without writing code to catch exceptions etc... so prefer ~find-ns~ for such check)
+
+Keywords can be namespaced too, but are seldom done.
+
+** In the wild
+clojure.core :- ~(require '[clojure.core :refer :all])~
+---------------------------------------------------------------------------------------------------
+
+*How to include a dependency into your project:-*
+Eg:
+Say you want to include the KormaSQL library
+
+Go to that library's homepage or github and figure out the latest version
+Github readme says ~[korma "0.4.3"]~
+
+Include this array into ~projects.clj~ file created by leiningen
+Next time you run ~lein repl~, that dependency gets downloaded and included
+
+Now, how to figure out what argument to pass to ~'require~
+Looking at the example from the readme, I see that the first line is ~(use 'korma.db)~
+From this, I get my argument ~korma.db~
+aka
+~[korma.db :as db]~
+
+#+begin_quote bash output
+[anup@imac0 blottsbooks]$ lein repl
+Retrieving korma/korma/0.4.3/korma-0.4.3.pom from clojars
+Retrieving org/clojure/clojure/1.8.0/clojure-1.8.0.pom from central
+Retrieving com/mchange/c3p0/0.9.5.2/c3p0-0.9.5.2.pom from central
+Retrieving com/mchange/mchange-commons-java/0.2.11/mchange-commons-java-0.2.11.pom from central
+Retrieving org/clojure/java.jdbc/0.6.1/java.jdbc-0.6.1.pom from central
+Retrieving org/clojure/clojure/1.4.0/clojure-1.4.0.pom from central
+Retrieving org/sonatype/oss/oss-parent/5/oss-parent-5.pom from central
+Retrieving com/mchange/c3p0/0.9.5.2/c3p0-0.9.5.2.jar from central
+Retrieving com/mchange/mchange-commons-java/0.2.11/mchange-commons-java-0.2.11.jar from central
+Retrieving org/clojure/java.jdbc/0.6.1/java.jdbc-0.6.1.jar from central
+Retrieving korma/korma/0.4.3/korma-0.4.3.jar from clojars
+nREPL server started on port 37507 on host 127.0.0.1 - nrepl://127.0.0.1:37507
+REPL-y 0.5.1, nREPL 1.0.0
+Clojure 1.11.1
+OpenJDK 64-Bit Server VM 21.0.4+7-LTS
+    Docs: (doc function-name-here)
+          (find-doc "part-of-name-here")
+  Source: (source function-name-here)
+ Javadoc: (javadoc java-object-or-class-here)
+    Exit: Control+D or (exit) or (quit)
+ Results: Stored in vars *1, *2, *3, an exception in *e
+
+blottsbooks.core=> (require '[korma.db :as db])
+nil
+blottsbooks.core=> (count (ns-map 'korma.db))
+796
+ blottsbooks.core=> 
+#  +end_quote
+**  Staying out of trouble
+The =.= in a namespace doesnt have any special meaning to Clojure.
+
+Pass ~:reload~ keyword to re-evaluate a namespace. By default, already included namespace isnt evaluated, even if the source code has new edits.
+
+~defonce~ can be used to bind a symbol to a value, with the special property that this binding happens exactly once. The very first time you include that namespace.
+Subsequent ~:reload~ refuses to re-run those bindings. This is helpful when you have function with side effects or those that take a long time to finish.
+
+~ns-unmap~ can be used to unbind a ?symbol
+
+*This marks the end of Part I - Basics -------------------------------------------------------------*
+Next starts *Part II - Intermediate*
+
+* Sequences
+
+* File Settings
+:PROPERTIES:
+:UNNUMBERED: t
+:END:
+It is important to ensure that the ~local variables~ are defined near the end of a file.
+Specifically, emacs loads ~local variables~ by reading /only/ the last 3000 characters of the file being read.
+
+# Local Variables:
+# org-num-max-level: 1
+# eval: (progn (org-num-mode -1) (org-num-mode +1))
+# eval: (setq org-startup-with-inline-images 'inlineimages)
+# eval: (auto-revert-mode -1)
+# End:
