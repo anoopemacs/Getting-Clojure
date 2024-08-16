@@ -1416,7 +1416,7 @@ nil
 blottsbooks.core=> (count (ns-map 'korma.db))
 796
  blottsbooks.core=> 
-#  +end_quote
+#+end_quote
 **  Staying out of trouble
 The =.= in a namespace doesnt have any special meaning to Clojure.
 
@@ -1431,6 +1431,609 @@ Subsequent ~:reload~ refuses to re-run those bindings. This is helpful when you 
 Next starts *Part II - Intermediate*
 
 * Sequences
+Clojure code *isnt* written with specificity to each collection type: map, set, vector, list
+It *is* written to a sequence_abstract_type0
+
+** One thing after another
+How can we implement a ~count~ that works on all collection types:-
+Option1. multimethod + specific defmethod implementation for each type
+Option2. normal function that works on a seq + collection type turned into a seq by making use of a wrapper_function(<specific_type>) = <seq_type>
+*Clojure chooses Option 2* (This is known as Adapter-Pattern in OOP circles)
+
+#+begin_quote What is a Sequence?
+Clojure calls its generic collection wrappers [as] sequences. Under the hood, there are as mnay flavors of sequences as there are collection types, but to the outside world all sequences provide a very uniform interface: no matter if it's a vector or a map or a list or a set behind a sequence, one sequence looks exactly like another.
+#+end_quote
+
+What a seq looks like
+#+begin_src clojure
+(def book-title-seq (seq ["Emma" "Oliver Twist" "Robinson Crusoe"]))
+;; => #'user/book-title-seq
+book-title-seq
+;; => ("Emma" "Oliver Twist" "Robinson Crusoe")
+#+end_src
+*Dont be fooled by the round parenthesis into thinking its a list type*
+Its a seq
+
+#+begin_src clojure
+(seq '("Emma" "Oliver Twist" "Robinson Crusoe"))
+;; => ("Emma" "Oliver Twist" "Robinson Crusoe")
+(seq {:title "Emma", :author "Austen", :published 1815})
+;; => ([:title "Emma"] [:author "Austen"] [:published 1815])
+;; ^order not guranteed
+
+(seq (seq [1 2 3]))
+;; => (1 2 3)
+#+end_src
+
+
+seq returns nil if empty
+#+begin_src clojure
+(seq [])
+;; => nil
+(seq '())
+;; => nil
+(seq '{})
+;; => nil
+#+end_src
+^ ~(seq <some collection)~ can therefore be used as a truthy value
+** A Universal interface - with a foursome of functions
+1. first
+2. rest
+3. next 
+4. cons
+
+From hereon, this chapter feels a lot like Ch-1 of SICP
+
+~next~ unlike ~rest~, returns nil if empty
+#+begin_src clojure
+(next [1])
+;; => nil
+(rest [1])
+;; => ()
+#+end_src
+
+Lets get a feel for these four functions
+#+begin_src clojure
+(first (seq '("Emma" "Oliver Twist" "Robinson Crusoe")))
+;; => "Emma"
+(rest (seq '("Emma" "Oliver Twist" "Robinson Crusoe")))
+;; => ("Oliver Twist" "Robinson Crusoe")
+(next (seq '("Emma" "Oliver Twist" "Robinson Crusoe")))
+;; => ("Oliver Twist" "Robinson Crusoe")
+(cons "Mahabharata" '("Emma" "Oliver Twist" "Robinson Crusoe"))
+;; => ("Mahabharata" "Emma" "Oliver Twist" "Robinson Crusoe")
+#+end_src
+*And, that's it. These are the only four primitive functions necessary to define a huge number of sequence functions*
+
+Lets try to implement ~my-count~
+#+begin_src clojure
+;;my own try:-
+(defn my-count [col]                    ;col stands for collection, aka, any collection type
+  (loop [col-s (seq col)
+         ret 0]
+    (if (next col-s)
+      (recur (next col-s) (+ ret 1))
+      (+ ret 1))))
+;; => #'user/my-count
+(my-count [9 3 5])
+;; => 3
+(my-count [nil nil nil])
+;; => 3
+
+;;textbook:-
+(defn my-count [col]
+  (let [the-seq (seq col)]
+    (loop [ret 0 s the-seq]
+      (if (seq s)                       ;to take care of turning the final [] into nil
+        (recur (inc ret) (rest s))
+        ret))))
+(my-count [9 3 5])
+;; => 3
+(my-count [nil nil nil])
+;; => 3
+#+end_src
+
+^Anup self tip: Prefer to use ~rest~ over ~next~
+Because ~rest~ always returns a seq-type. So, results in cleaner code type wise.
+Unlike ~next~ which can return either a seq-type or nil
+
+~my-count~ implementation follows a pattern,
+1. turn collection into a sequence
+2. use the foursome to manipulate this seq
+*This is the common pattern in which even the builtin seq functions are implemented*
+   
+** A Rich Toolkit - the large number of useful builtin seq functions provided by Clojure
+#+begin_src clojure
+(count [9 2 5])
+;; => 3
+(def titles ["Jaws" "Emma" "2001" "Dracula"])
+;; => #'user/titles
+(reverse titles)
+;; => ("Dracula" "2001" "Emma" "Jaws")
+(sort titles)
+;; => ("2001" "Dracula" "Emma" "Jaws")
+(reverse (sort titles))
+;; => ("Jaws" "Emma" "Dracula" "2001")
+(def titles-and-authors ["Emma" "Austen" "Jaws" "Benchley"])
+;; => #'user/titles-and-authors
+(partition 2 titles-and-authors)
+;; => (("Emma" "Austen") ("Jaws" "Benchley"))
+
+(def titles ["HackersPainters" "Emma"])
+;; => #'user/titles
+(def authors '("PGraham" "Austen"))
+;; => #'user/authors
+(interleave titles authors)
+;; => ("HackersPainters" "PGraham" "Emma" "Austen")
+;;;;;;;; interleave combines two sequences into a single sequence. So, kinda like ~append~ in scheme
+
+(def scary-animals ["lion" "tiger" "crocodile"])
+;; => #'user/scary-animals
+(interpose "and" scary-animals)
+;; => ("lion" "and" "tiger" "and" "crocodile")
+#+end_src
+
+** ...Made Richer with Functional Values
+ie adding the awesome 'functions are values' to above 'sequence abstract type' idea makes for a beautiful experience
+
+#+begin_src clojure
+(filter neg? '(1 9 -2 4 -8 5 -23))
+;; => (-2 -8 -23)
+
+(def books [{:title "Deep Six" :price 13.99 :genre :sci-fi :rating 6}
+            {:title "Dracula" :price 1.99 :genre :horror :rating 7}
+            {:title "Emma" :price 7.99 :genre :comedy :rating 9}
+            {:title "2001" :price 10.50 :genre :sci-fi :rating 5}])
+;; => #'user/books
+(defn cheap? [book]
+  (if (<= (:price book) 9.99)
+    book))
+;; => #'user/cheap?
+(filter cheap? books)
+;; => ({:title "Dracula", :price 1.99, :genre :horror, :rating 7}
+;;     {:title "Emma", :price 7.99, :genre :comedy, :rating 9})
+
+(some cheap? books)
+;; => {:title "Dracula", :price 1.99, :genre :horror, :rating 7}
+;; Mnemonic:- Is there some item that passes the test?
+#+end_src
+
+** Map
+#+begin_src clojure
+(map inc [0 5 9])
+;; => (1 6 10)
+
+books
+;; => [{:title "Deep Six", :price 13.99, :genre :sci-fi, :rating 6}
+;;     {:title "Dracula", :price 1.99, :genre :horror, :rating 7}
+;;     {:title "Emma", :price 7.99, :genre :comedy, :rating 9}
+;;     {:title "2001", :price 10.5, :genre :sci-fi, :rating 5}]
+
+(map :title books)
+;; => ("Deep Six" "Dracula" "Emma" "2001")
+;; This trick with keywords being functions makes code succinct
+
+;; Lengths of the titles
+(map (comp count :title) books)
+;; => (8 7 4 4)
+#+end_src
+
+~comp~ *accepts a bunch of functions and returns a function that is effectively the same as*
+*applying each of the argument functions one after another, right to left*
+I was not able to recall the name of this function. I found that ChatGPT was very useful in finding the answer.
+Whereas google search couldnt help me find it.
+
+~for~ is not popular in Clojure circles. Still, obligatory example:-
+#+begin_src clojure
+(for [b books]
+  (count (:title b)))
+;; => (8 7 4 4)
+#+end_src
+Clojure's *for* returns a seq.
+
+** Reduce
+Combines all the elements of a collection into a single value
+#+begin_src clojure
+(reduce + 100 [1 2 3 4])
+;; => 110
+(reduce + [1 2 3 4])
+;; => 10
+#+end_src
+If you exclude the initial value, then ~reduce~ will consider the first element of the collection as the initial value.
+
+*Reduce is not only for adding numbers*
+It can be used whenever you want to turn a sequence into some single value.
+
+Eg:-
+Find the highest priced  book (my own version)
+#+begin_src clojure
+books
+;; => [{:title "Deep Six", :price 13.99, :genre :sci-fi, :rating 6}
+;;     {:title "Dracula", :price 1.99, :genre :horror, :rating 7}
+;;     {:title "Emma", :price 7.99, :genre :comedy, :rating 9}
+;;     {:title "2001", :price 10.5, :genre :sci-fi, :rating 5}]
+(reduce (fn [b1 b2] (if (> (:price b1) (:price b2)) b1 b2)) books)
+#+end_src
+
+textbook version has a mistake:
+It finds the price of the highest priced book. Not the highest priced book as described in question.
+#+begin_src clojure
+(defn hi-price [current-highest-price book]
+  (if (> (:price book) current-highest-price)
+    (:price book)
+    current-highest-price))
+;; => #'user/hi-price
+
+(reduce hi-price 0 books)
+;; => 13.99
+#+end_src
+
+** Composing a Solution
+Get the top 3 bestrated books as a string seperated by " // "
+#+begin_src clojure
+books
+;; => [{:title "Deep Six", :price 13.99, :genre :sci-fi, :rating 6}
+;;     {:title "Dracula", :price 1.99, :genre :horror, :rating 7}
+;;     {:title "Emma", :price 7.99, :genre :comedy, :rating 9}
+;;     {:title "2001", :price 10.5, :genre :sci-fi, :rating 5}]
+
+(sort-by :rating books)
+;; => ({:title "2001", :price 10.5, :genre :sci-fi, :rating 5}
+;;     {:title "Deep Six", :price 13.99, :genre :sci-fi, :rating 6}
+;;     {:title "Dracula", :price 1.99, :genre :horror, :rating 7}
+;;     {:title "Emma", :price 7.99, :genre :comedy, :rating 9})
+
+(defn format-top-titles [books]
+  (reduce str (interpose " // " (map :title (take 3 (reverse (sort-by :rating books)))))))
+;; => #'user/format-top-titles
+
+(format-top-titles books)
+;; => "Emma // Dracula // Deep Six"
+#+end_src
+*You can get a lot of computing out of a few sequence functions.*
+Remember that even SICP taught me the same.
+
+** Other Sources of Sequences
+You can turn a lot of things into sequences, besides vectors, lists, sets, maps
+
+~line-seq~ turns a text file into a sequence of its lines
+#+begin_src clojure
+(require '[clojure.java.io :as io])
+;; => nil
+(defn listed-author? [author]
+  (with-open  [r (io/reader "authors.txt")]
+    (some (partial = author) (line-seq r))))
+;; => #'user/listed-author?
+(listed-author? "Paul Graham")
+;; => true
+#+end_src
+
+~re-seq~ turns regular expression matches into a sequence
+#+begin_src clojure
+(def re #"Pride and Prejudice.*")
+;; => #'user/re
+(def title "Pride and Prejudice and Zombies")
+;; => #'user/title
+(if (re-matches re title)
+  (println "This is either a classic or a riff on it"))
+;; => nil
+
+(re-seq #"\w+" title)
+;; => ("Pride" "and" "Prejudice" "and" "Zombies")
+#+end_src
+Notice that =#(= is used for function literals whereas =#"= is used for regular expression
+** In the wild
+Overtone
+Clojurescript
+
+~-->>~ syntactic sugar places each step of computation at the end
+#+begin_src clojure
+books
+;; => [{:title "Deep Six", :price 13.99, :genre :sci-fi, :rating 6}
+;;     {:title "Dracula", :price 1.99, :genre :horror, :rating 7}
+;;     {:title "Emma", :price 7.99, :genre :comedy, :rating 9}
+;;     {:title "2001", :price 10.5, :genre :sci-fi, :rating 5}]
+
+;;harder to read
+(defn format-top-titles [books]
+  (reduce str (interpose " // " (map :title (take 3 (reverse (sort-by :rating books)))))))
+;; => #'user/format-top-titles
+(format-top-titles books)
+;; => "Emma // Dracula // Deep Six"
+
+;;easier to read
+(defn format-top-titles [books]
+  (->>
+    books
+    (sort-by :rating)
+    reverse                             ;;no need to write it as ~(reverse)~
+    (take 3)
+    (map :title)
+    (interpose " // ")
+    (reduce str)))
+;; => #'user/format-top-titles
+(format-top-titles books)
+;; => "Emma // Dracula // Deep Six"
+#+end_src
+
+~->~ syntactic sugar places it (each step of computation) at the begining
+** Staying out of trouble
+Avoid processing sequence items one at a time. Its a Clojure antipattern.
+Eg: ~for~ is seldom used by Clojurists, they prefer ~map~
+
+Turning a specialized collection into a generic sequence leads to loss of its specialized talents.
+Eg: After turning a_map into a a_seq, the fast key-value access property is lost.
+
+There are functions that do not return a seq type, instead returning the same type of collection as its argument.
+Eg: ~conj~, (unlike cons)
+Such function's implementation has special code for each collection type, unlike seq-functions which only make use of the foursome.
+
+#+begin_quote Dont avoid seqs
+None of this means sequences are bad or that you should always fight the natural drift towards them. On the contrary, having a universal abstraction that allows you to work with vectors and sets and lists without constantly worrying about which you have is incredibly useful. But you do need to be mindful of when you have the actual thing and when you have the sequence.
+#+end_quote
+* Lazy Sequences
+made possible by combining previous ideas:-
+1. Functional programming
+2. Sequence abstraction
+
+Laziness is a virtue. Aside: AirBnB founder said "You have to earn the right to ship a new feature for your user."
+
+Aside:- Doubt? Where is Laziness on the spectrum between: 1. Optimize time complexity while sacrificing space complexity and 2. vice versa.
+Ans try1: It is not one or the other.
+       Laziness enables us to represent infinity. (apart from allowing use to defer computation)
+       Both infinitely large dataset as well as infinitely long computation
+
+** Sequences without End
+The sequence api is abstract.
+As long as it satisfies foursome, its a seq. That's it.
+
+So, even if we make up return values of ~first~, ~next~ and ~rest~ on the fly,
+we still have a seq.
+ie It isnt necessary for a seq to have a one on one mapping to some collection type.
+
+Create a test book with nonsense content. The nonsense is a repetition of a proverb.
+#+begin_src clojure
+;;the proverb
+(def jack "All work and no play makes Jack a dull boy.")
+;; => #'user/jack
+
+;;dummy textbook
+(def text [jack jack jack jack jack jack])
+;; => #'user/text
+text
+;; => ["All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."]
+
+(set! *print-length* 20)
+;; => 20
+
+(repeat jack)
+;; => ("All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy."
+;;     ...)
+
+(def text (repeat jack))
+;; => #'user/text
+#+end_src
+
+The ret from repeat is infinitely long.
+Also, its lazy, ie, it waits until its asked to generate a value by those foursome.
+
+A *Lazy sequence* is one that waits to be asked before it generates its elements.
+An *Unbounded sequence* is always a lazy sequence, that goes on forever.
+
+Not all lazy sequences are unbounded.
+
+~take~ is useful while dealing with unbounded sequences.
+#+begin_src clojure
+(take 2 text)
+;; => ("All work and no play makes Jack a dull boy."
+;;     "All work and no play makes Jack a dull boy.")
+#+end_src
+
+** More interesting laziness
+~cycle~ and ~iterate~
+#+begin_src clojure
+(cycle [1 2 3])
+;; => (1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2 3 1 2 ...)
+(iterate inc 4)
+;; => (4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 ...)
+(def numbers (iterate inc 1))
+;; => #'user/numbers
+#+end_src
+
+** Lazy friends
+~take~ is itself lazy.
+
+Therefore, both these take approximately same amount of time.
+#+begin_src clojure
+(println (take 20 (iterate inc 1)))
+;; => nil
+(println (take 20 (take 1000000000 (iterate inc 1))))
+;; => nil
+#+end_src
+
+~map~ is also lazy.
+#+begin_src clojure
+(def evens (map #(* 2 %) (iterate inc 1)))
+#+end_src
+
+~iterleave~ is lazy as well.
+So, we can safely interleave infinite sequences.
+#+begin_src clojure
+(interleave numbers evens)
+;; => (1 2 2 4 3 6 4 8 5 10 6 12 7 14 8 16 9 18 10 20 ...)
+#+end_src
+
+In fact, a lot of sequence functions are lazy
+
+*Visualization for lazy sequences*
+Think of it as a just in time factory line
+ie Production kicks off only after you ask for an element from it.
+
+** Laziness in practise - an example
+Eg: Generate a book series, with twenty authors. Every twentieth book of the series is by one of the authors.
+
+What a series looks like:-
+#+begin_src clojure
+(def numbers [1 2 3])
+;; => #'user/numbers
+(def trilogy (map #(str "Fifty shades of gray, Book " %) numbers))
+;; => #'user/trilogy
+trilogy
+;; => ("Fifty shades of gray, Book 1"
+;;     "Fifty shades of gray, Book 2"
+;;     "Fifty shades of gray, Book 3")
+#+end_src
+
+There are 20 authors that write the books in the series.
+After finising the first book, the first author writes the 21st book in the series, and so on.
+
+Lets make the book titles
+#+begin_src clojure
+(def numbers (iterate inc 1))
+;; => #'user/numbers
+(def titles (map #(str "Fifty shades of gray, Book " %) numbers))
+;; => #'user/titles
+#+end_src
+
+Lets make the authors
+#+begin_src clojure
+(def first-names ["Bob" "Jane" "Chuck" "Leo"])
+;; => #'user/first-names
+(def last-names ["Jordan" "Austen" "Dickens" "Tolstoy" "Poe"])
+;; => #'user/last-names
+
+;; There will be (* 4 5) = 20 authors
+(defn combine-names [fname lname] (str fname " " lname))
+;; => #'user/combine-names
+
+(def authors (map combine-names (cycle first-names) (cycle last-names)))
+;; => #'user/authors
+#+end_src
+
+Make the map of books
+#+begin_src clojure
+(defn make-book [title author] {:title title :author author})
+;; => #'user/make-book
+(def test-books (map make-book titles authors))
+;; => #'user/test-books
+#+end_src
+
+Whenever ~(first test-books)~ is called, it triggers a cascade of computation.
+But, the key is that we only compute just-in-time. Hence, we *only* pay for *both* the CPU and Memory that we actually use.
+
+** Behind the Scenes
+how to create a lazy sequence
+#+begin_src clojure
+(lazy-seq [1 2 3])
+;; => (1 2 3)
+#+end_src
+
+~lazy-seq~ vs ~seq~
+#+begin_src clojure
+(defn chatty-vector []
+  (println "I return a chatty vector")
+  [1 2 3])
+;; => #'user/chatty-vector
+
+(def s1 (seq (chatty-vector)))          ;prints
+
+(def s2 (lazy-seq (chatty-vector)))
+(first s2)                              ;now prints
+#+end_src
+
+In Chapter 20, we will learn that ~lazy-seq~ is implemented using some macro magic.
+-------------------------------------------------------------------------------------------------------------------------
+How lazy sequence creation operations internally work:-
+
+My own version of /repeat, iterate, map/
+#+begin_src clojure
+(defn my-repeat [x]
+  (cons x (lazy-seq (my-repeat x))))
+;; => #'user/my-repeat
+
+(defn my-iterate [f x]
+  (cons (f x) (lazy-seq (my-iterate f (f x)))))
+;; => #'user/my-iterate
+#+end_src
+
+~my-map~ will also teach me how to terminate when one of the args is not infinite.
+Its implementation also uses the idea that you can ~cons~ onto ~nil~
+#+begin_src clojure
+(cons 3.14 nil)
+;; => (3.14)
+
+;;;;below wont work for finite col
+;;(defn my-map [f col]
+;;  (cons (f (first col))
+;;    (lazy-seq (my-map f (next col)))))
+
+(defn my-map [f col]
+  (when col
+    (cons (f (first col))
+      (lazy-seq (my-map f (next col))))))
+;; => #'user/my-map
+#+end_src
+
+** Staying Out of Trouble
+Helpful to avoid printing infintely long seqs
+#+begin_src clojure
+(set! *print-length* 20)
+#+end_src
+---------------------------------------------------------------------------------------------------
+Aside:-
+~slurp~ :- Universal Clojure tool to read something. Accepts url, filepath etc
+~spit~ :- Write string to file path
+
+#+begin_src clojure
+(slurp "authors.txt")
+#+end_src
+
+#+begin_src clojure
+(spit "/tmp/spit-out.txt" "Abrakadabra")
+#+end_src
+---------------------------------------------------------------------------------------------------
+Be careful about side-effects when dealing with lazy sequences.
+Take into consideration the state when the lazy sequence is finally evaluated, not at creation time of that sequence.
+
+Use ~doall~ to force evaluation of a lazy seq right NOW.
+~doseq~ is similar, and useful when you dont-want/space-wont-permit to hold a reference to the entire unlazified-sequence
+
+** In the wild
+nREPL
+^Show a nice *Clojure design pattern0* to turn a *side-effect driven event* into a /lazy-seq/
+Further processing is now easy. Because Clojure has a rich library of seq builtins.
+
+Lazy sequences are /very very/ common in Clojure.
+Only a few exceptions are not-lazy aka eager:- ~count~
+
+* Destructuring
+aka How to pluck just the value we need from some collection.
+
+
 
 * File Settings
 :PROPERTIES:
