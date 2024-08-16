@@ -3,6 +3,10 @@
 :UNNUMBERED: t
 :END:
 "In the Wild" realworld code examples
+
+Aside, Official docs:-
+[[file:cheatsheet-usletter-color.pdf]]
+[[file:clojure-api-docs/api-index.html]]
 * Hello, Clojure
 ** The Very Basics
 #+begin_src clojure
@@ -2027,14 +2031,268 @@ nREPL
 ^Show a nice *Clojure design pattern0* to turn a *side-effect driven event* into a /lazy-seq/
 Further processing is now easy. Because Clojure has a rich library of seq builtins.
 
+?Visualize above design pattern:-
+Look at ".model a stream of side effects as a lazy seq.svg" file in the current folder.
+
+Bug:-
+[//[file:.model a stream of side effects as a lazy seq.svg]//] hangs emacs! (if you uncomment it and enable inline images)
+Hence, wasnt able to display above xopp file using ~org-xournal-redisplay-images~
+The svg file isnt corrupted, because it opens properly in Google Chrome.
+
+Workaround:- Manually exported to png and inserted below
+[[file:model a stream of side effects as a lazy seq.png]]
+
 Lazy sequences are /very very/ common in Clojure.
 Only a few exceptions are not-lazy aka eager:- ~count~
 
 * Destructuring
 aka How to pluck just the value we need from some collection.
 
+** Pry Open your Data
+#+begin_src clojure
+(def artists [:monet :austen])
+;; => #'user/artists
+(let [[painter novelist] artists]
+  (println (str "The painter is: " painter))
+  (println (str "The novelist is: " novelist)))
+#+end_src
 
+** Getting Less than Everything
+#+begin_src clojure
+(def artists [:monet :austen :beethoven :kuvempu])
+;; => #'user/artists
+(let [[painter novelist musician] artists]
+  (println (str painter " // " novelist " // " musician)))
+#+end_src
 
+Ignoring some leading values
+#+begin_src clojure
+(let [[_ _ musician poet] artists]
+  (println (str musician " // " poet)))
+;;There is nothing special about '_', its just a convention
+;;As usual, _ gets bound to :monet, then gets rebound to :austen, which is its value in the let body, but is unused
+#+end_src
+
+Two-level vector's destructuring
+#+begin_src clojure
+(def pairs [[:monet :austen] [:beethoven :dickinson]])
+;; => #'user/pairs
+(let [[[painter] [musician _]] pairs]   ;;The first braket need not compulsorily be [painter _]
+  (println (str painter " // " musician)))
+#+end_src
+
+** Destructuring in Sequence
+Same syntax as vector destructuring, *continue to use square brackets around the capturing template* 
+#+begin_src clojure
+(def artist-list '(:monet :austen :beethoven :dickinson))
+;; => #'user/artist-list
+(let [[painter novelist musician] artist-list]
+  (println (str painter " // " novelist " // " musician)))
+#+end_src
+Those square brackets stand for /delimiters for ANY sequential data type/. (but we use flower bracket for map destructuring template)
+
+Eg: String is a seq type. Therefore its characters can be destructured:-
+#+begin_src clojure
+(let [[c1 c2 c3 c4] "Anup"]
+  (println (str "My name is spelled as:"))
+  (println c1)
+  (println c2)
+  (println c3)
+  (println c4))
+#+end_src
+
+The rule is, if you can turn it into a sequence, you can destructure it.
+
+** Destructuring Function Arguments
+#+begin_src clojure
+(defn artist-description [[novelist poet]]
+  (str "The novelist is: " novelist " and the poet is: " poet))
+;; => #'user/artist-description
+(artist-description [:austen :kuvempu])
+;; => "The novelist is: :austen and the poet is: :kuvempu"
+#+end_src
+Just keep in mind that the value to be destructured *is provided when the function is called*
+
+Mix and match normal function arguments with destructured arguments
+#+begin_src clojure
+(defn artist-description [shout [novelist poet]]
+  (let [msg (str "The novelist is: " novelist " and the poet is: " poet)]
+    (if shout
+      (.toUpperCase msg)
+      msg)))
+;; => #'user/artist-description
+(artist-description true [:austen :kuvempu])
+;; => "THE NOVELIST IS: :AUSTEN AND THE POET IS: :KUVEMPU"
+#+end_src
+
+** Digging into Maps
+*The ordering in the soaking-template is counter-intuitive.*
+Instead of key, then value_soaker
+The ordering is value_soaker, then key
+#+begin_src clojure
+(def artist-map {:painter :monet :novelist :austen})
+;; => #'user/artist-map
+(let [{painter :painter novelist :novelist} artist-map]
+  (println (str painter " // " novelist)))
+;; => nil
+#+end_src
+
+Doubt: We know that
+SICP taught me that ~let~ is just syntactic sugar for a lambda definition and that lambda being called
+Can this explain the counter intuitive ordering?
+
+** Diving into Nested Maps
+#+begin_src clojure
+(def austen {:name "Jane Austen" :parents {:father "George" :mother "Cassandra"} :dates {:born 1775 :died 1817}})
+;; => #'user/austen
+(let [{{father :father mother :mother} :parents} austen]
+  (str "Her father was " father " and mother was " mother))
+;; => "Her father was George and mother was Cassandra"
+
+(let [{name :name
+       {mother :mother} :parents
+       {dob :born} :dates} austen]
+  (str name " was born in " dob " and her mother's name was " mother))
+;; => "Jane Austen was born in 1775 and her mother's name was Cassandra"
+#+end_src
+
+** The final frontier: Mixing and Matching
+Eg1
+#+begin_src clojure
+(def author {:name "Jane Austen"
+             :books [{:title "Sense and Sensibility" :published 1811}
+                     {:title "Emma" :published 1815}]})
+;; => #'user/author
+(let [{name :name
+       [book] :books} author]
+  (str "The author is " name " and one of their books is " book))
+;; => "The author is Jane Austen and one of their books is {:title \"Sense and Sensibility\", :published 1811}"
+#+end_src
+
+Eg2
+#+begin_src clojure
+(def authors [{:name "Jane Austen" :born 1775}
+              {:name "Charles Dickens" :born 1812}])
+;; => #'user/authors
+(let [[{dob1 :born} {dob2 :born}] authors]
+  (str "One author was born in " dob1 " and the other author was born in " dob2))
+;; => "One author was born in 1775 and the other author was born in 1812"
+#+end_src
+
+** Going further
+In this section we learn two more tricks:-
+
+1. How to automatically make the key_name as the capturing name
+   #+begin_src clojure
+   (def character {:name "Mario" :age 16 :gender :male})
+   ;; => #'user/character
+
+   (defn character-desc [{name :name age :age gender :gender}]
+     (str "Name: " name " Age: " age " Gender: " gender))
+   ;; => #'user/character-desc
+
+   (defn character-desc [{:keys [name age gender]}]
+     (str "Name: " name " Age: " age " Gender: " gender))
+   ;; => #'user/character-desc
+
+   (character-desc character)
+   ;; => "Name: Mario Age: 16 Gender: :male"
+   #+end_src
+Notice that ordering of =:keys= and =[name age gender]= is counter-intuitive.
+This reversal, ie, a keyword on the left side,
+lets the destructuring mechanism to treat this as a special case.
+
+Just remember the capture template syntax ~:keys [keyword_without_left_colon_1    keyword_without_left_colon_2 ...]~
+---------------------------------------------------------------------------------------------------
+
+Mix and match normal destructuring with /:keys based destructuring/
+#+begin_src clojure
+(defn character-desc [{:keys [name gender]
+                       age-in-years :age}]
+  (str "Name: " name " age:" age-in-years " gender: " gender))
+;; => #'user/character-desc
+(character-desc character)
+;; => "Name: Mario age:16 gender: :male"
+#+end_src
+
+   ---------------------------------------------------------------------------------------------------
+2. How to capture the *both* the un-destructured whole along with some destructured from it.
+
+Lets say we want to add a new key called ~:greeting~ into the above character of map type
+
+To bulid the ret by +consing+ /assoc-ing/, we need the original map
+But to build the value of greeting, we need the destructured name, age, gender
+
+So, we need to capture both
+#+begin_src clojure
+(defn add-greeting [{:keys [name age] :as character}]
+  (assoc character
+    :greeting (str "Hello, my name is " name " and I am " age " years old.")))
+;; => #'user/add-greeting
+(add-greeting character)
+;; => {:name "Mario",
+;;     :age 16,
+;;     :gender :male,
+;;     :greeting "Hello, my name is Mario and I am 16 years old."}
+#+end_src
+Just remember the syntax ~:as character~ within  the flower brackets
+
+** Staying out of trouble
+Whenever you want to dive very deep:-
+1. Drill down in *multiple stages, with descriptive intermediate names* (intention-revealing names)
+
+Eg: Lets say we want to print the fullname of the second user's favorite author:-
+#+begin_src clojure
+(def user-info [{:name "Charlie", :fav-book {:title "Carrie", :author ["Stephen" "King"]}}
+                {:name "Jennifer", :fav-book {:title "Emma", :author ["Jane" "Austen"]}}])
+;; => #'user/user-info
+
+;;BAD VERSION
+;;full name of the author of the second reader's fav book
+;;(defn format-a-name [[_
+;;                      {{[first-name last-name] :author} :fav-book}]]
+;;  (str first-name " " last-name))
+;; => #'user/format-a-name
+
+(format-a-name user-info)
+;; => "Jane Austen"
+
+;;GOOD VERSION
+(defn format-a-name [[_ second-user]]
+  (let [[first-name last-name] (->> second-user :fav-book :author)]
+    (str first-name " " last-name)))
+;; => #'user/format-a-name
+
+(format-a-name user-info)
+;; => "Jane Austen"
+#+end_src
+------------------------------------------------------------------------------------------------------------------------
+2. Destructuring *only works inside* a ~let~ or inside a ~defn~
+#+begin_src clojure
+(def author {:name "Jane Austen" :born 1775})
+;; => #'user/author
+
+;;WONT WORK
+;;(def author-name [{n :name} author])
+#+end_src
+ie, we cannot use the destructuring template followed by 'author' outside of the above two forms
+
+A ~let~ can be used to make above work
+#+begin_src clojure
+(def author-name (let [{name :name} author] name))
+;; => #'user/author-name
+author-name
+;; => "Jane Austen"
+#+end_src
+
+** In the wild
+Korma SQL library
+^We also learn ~:or~ which is a sister of ~:as~
+~:or~ lets you set default values when destructuring fails due to absence of some key.
+** Wrapping up
+Destructuring is soo  much better than ~first~-ing , ~rest~-ing, nth-ing till your head explodes 😀
+* Records and Protocols
+Recards are like maps, but specialized for a particular purpose.
 * File Settings
 :PROPERTIES:
 :UNNUMBERED: t
