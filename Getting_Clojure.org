@@ -1274,6 +1274,8 @@ Such long name makes a symbol defined in one namespace available in another
 ** Loading Namespaces using ~require~
 You need to make sure the namespace you want to use is loaded before you try to use it.
 ~(require <quoted name>)~
+or
+~(require '[<name> :as blabla])~
 
 (Aside: We will learn another way to loading namespaces later in this chapter using ~(ns <bla> (:require <unquoted>))~)
 
@@ -2513,10 +2515,12 @@ Design choice: If Protocol suffices, avoid using a multimethod in its place.
 
 ** In the wild
 Clostache templating library
-*Clostache library uses just ONE record type. It uses NO protocols, NO polymorphism. Its just simple maps and functions. I am sure it has many Github-stars and is widely used! This is typical of Clojure projects.*
+*Clostache library uses just ONE record type. It uses NO protocols, NO polymorphism. Its just simple maps and functions. This is typical of Clojure projects.*
+It has 318 stars, ?but is widely used.
 
 Stuart Sierra's Component library
 *It uses just ONE protocol*
+It has 2.1k stars, and is the most used library for startup management.
 
 ~reify~ creates a one-off protocol-instance without defining a protocol. Its helpful for testing purposes.
 Such instances are permitted to implement a protocol partially. ie, omit some methods.
@@ -2548,6 +2552,411 @@ Records are specialized maps.
 Protocols are collection of functions, that can be used to define *polymorphic operatons /on/ records*
 * Tests
 Tests make sure your code works.
+
+Eg: We have an inventory of books. We want to write two functions.
+
+1. find book-x by title
+2. find number of copies of a book-x
+where book-x is one of the books from the inventory.
+
+We learn =clojure.test= and =clojure.check= by setting up tests for the above two.
+
+** clojure.test
+~lein new inventory~
+
+What inventory looks like:-
+#+begin_src clojure
+[{:title "2001" :author "Clarke" :copies 21}
+ {:title "Emma" :author "Austen" :copies 10}
+ {:title "Misery" :author "King" :copies 101}]
+#+end_src
+
+#+begin_src clojure :tangle ./inventory/src/inventory/core.clj
+(ns inventory.core)
+
+(defn find-by-title
+  "Search for a book by title, where title is a string and books is a collection of book maps, each of which must have a :title entry"
+  [title books]
+  (some #(if (= (:title %) title) %) books)) ;;Recall that the ~some~ returns whatever the first truthy predicate returns 
+;; => #'user/find-by-title
+
+(defn number-of-copies-of
+  "Return the number of copies in inventory of the given title, where title is a string and books is a collection of book maps each of which must have a :title entry"
+  [title books]
+  (:copies (find-by-title title books)))
+;; => #'user/number-of-copies-of
+#+end_src
+Also, by convention, Clojure orders the function arguments such that,
+collection is the last argument.
+*** Where should I put my tests?
+The convention is to put them in a 'parallel' module; and suffix a =-test= to the end of the namespace. (Recall that =-= becomes =_= for filenames)
+Whats parallel:-
+=./inventory/src/inventory/core.clj=
+Parallel to it is
+=./inventory/test/inventory/core_test.clj=
+
+~(ns inventory.core)~
+Suffixing it is
+~(ns inventory.core-test)~
+*** ~deftest~
+~deftest~ lets us wire up the test
+#+begin_src clojure :tangle ./inventory/test/inventory/core_test.clj
+(ns inventory.core-test
+  (:require [clojure.test :refer :all])
+  (:require [inventory.core :as i]))
+
+(def books [{:title "2001" :author "Clarke" :copies 21}
+            {:title "Emma" :author "Austen" :copies 10}
+            {:title "Misery" :author "King" :copies 101}])
+
+(deftest test-finding-books
+  (is (not (nil? (i/find-by-title "Emma" books)))))
+
+;;(deftest test-something-that-fails
+;;  (is (not (nil? (i/find-by-title "Bla Bla Blue" books)))))
+
+;;can include more than one condition inside a single deftest
+(deftest test-finding-books-better
+  (is (not (nil? (i/find-by-title "Emma" books))))
+  (is (nil? (i/find-by-title "Bla Bla Blue" books))))
+
+;;organise tests into subtests using ~(testing~
+(deftest test-basic-inventory
+  (testing "Finding books"
+    (is (not (nil? (i/find-by-title "Emma" books))))
+    (is (nil? (i/find-by-title "Bla Bla Blue" books))))
+  (testing "Copies in inventory"
+    (is (= 10 (i/number-of-copies-of "Emma" books)))))
+#+end_src
+^Notice that since unit-tests are argumentless predicates, ~deftest~ syntax doesnt have any argument list.
+
+A =dev= directory is conventionally used to store REPL commands etc
+#+begin_src bash :results output verbatim :dir ./inventory
+mkdir dev
+#+end_src
+
+#+RESULTS:
+
+Run those tests
+#+begin_src clojure :tangle ./inventory/dev/run_test.clj
+(require '[inventory.core-test :as ct])
+
+(ct/test-finding-books)
+#+end_src
+** Run all the tests
+~(clojure.test/run-tests ...~
+#+begin_src clojure :tangle ./inventory/dev/run_tests.clj
+(require 'inventory.core-test)          ;?because tests arent loaded by default in a lein repl
+(require 'clojure.test)
+
+(ns inventory.core)                     ;select this ns
+(clojure.test/run-tests)                ;runs all tests in current ns
+(clojure.test/run-tests *ns*)
+
+;;below can be run from any namespace
+(clojure.test/run-tests 'inventory.core-test)
+#+end_src
+
+Using =lein=
+#+begin_src bash :results output verbatim :dir ./inventory
+lein test
+#+end_src
+
+#+RESULTS:
+: 
+: lein test inventory.core-test
+: 
+: Ran 3 tests containing 6 assertions.
+: 0 failures, 0 errors.
+** Generative Property based testing
+Programmatically generate test cases.
+
+External library name is ~test.check~
+Add ~[org.clojure/test.check "1.1.1"]~ to =project.clj=
+
+~sample~ is hardcoded to return next 10 values from a generator
+#+begin_src clojure
+(require '[clojure.test.check.generators :as gen])
+(gen/sample gen/string-alphanumeric)
+#+end_src
+
+#+begin_quote output
+inventory.core> (gen/sample gen/string-alphanumeric)
+("" "" "" "83" "L5" "9" "" "uErvu1" "R8Gc6eN" "A2h")
+#+end_quote
+
+To make =C-x C-e= work:-
+Start a cider repl inside the =inventory= folder
+Then connect to it using =M-x cider-connect= , pick localhost.
+
+We can get rid of empty string using ~gen/such-that~ that accepts a /predicate/ checker
+#+begin_src clojure
+(def title-gen (gen/such-that not-empty gen/string-alphanumeric))
+;; => #'inventory.core/title-gen
+(def author-gen (gen/such-that not-empty gen/string-alphanumeric))
+;; => #'inventory.core/author-gen
+(def copies-gen (gen/such-that (complement zero?) gen/pos-int))
+;; => #'inventory.core/copies-gen
+#+end_src
+
+Above generators can be combined
+#+begin_src clojure
+;;lets build a book generator
+(def book-gen
+  (gen/hash-map :title title-gen :author author-gen :copies copies-gen))
+;; => #'inventory.core/book-gen
+#+end_src
+
+Try it out
+#+begin_src clojure
+(gen/sample book-gen)
+;; => ({:title "Q", :author "m0", :copies 2}
+;;     {:title "U9", :author "b", :copies 1}
+;;     {:title "7", :author "zC", :copies 1}
+;;     {:title "h", :author "wM3", :copies 1}
+;;     {:title "xu", :author "67w", :copies 3}
+;;     {:title "pSK", :author "1zy2g", :copies 1}
+;;     {:title "6bNV", :author "WNkS", :copies 2}
+;;     {:title "vlr488q", :author "TeC", :copies 8}
+;;     {:title "V9", :author "eiwf05Mn", :copies 6}
+;;     {:title "W7vQUGgy", :author "R1", :copies 7})
+#+end_src
+
+~gen/vector~ spits out a vector whose elements are chosen from generator
+#+begin_src clojure
+(gen/sample (gen/vector book-gen))
+;; => ([]
+;;     []
+;;     [{:title "p", :author "0t", :copies 2}]
+;;     [{:title "Q", :author "Flm", :copies 1}]
+;;     [{:title "27Y", :author "Fzu", :copies 3}
+;;      {:title "k47", :author "dm", :copies 4}
+;;      {:title "G", :author "6X3", :copies 2}
+;;      {:title "zEvh", :author "hj37", :copies 4}]
+;;     [{:title "M4ML", :author "4Y6", :copies 3}]
+;;     [{:title "VoQGop", :author "j2", :copies 1}
+;;      {:title "6J", :author "6KIJ", :copies 1}
+;;      {:title "3", :author "q3Z", :copies 3}
+;;      {:title "S6", :author "b438L", :copies 3}
+;;      {:title "E3CAC2", :author "s0F7T6", :copies 5}
+;;      {:title "eI", :author "516", :copies 2}]
+;;     [{:title "Lzvk", :author "81Z3", :copies 2}
+;;      {:title "K", :author "1AhmIc9", :copies 7}
+;;      {:title "vmu5", :author "I", :copies 3}
+;;      {:title "uY1", :author "e953", :copies 4}
+;;      {:title "sJ81Dg1", :author "24CA8", :copies 5}
+;;      {:title "569Qu", :author "73q", :copies 7}]
+;;     [{:title "5", :author "9L7Cn0k", :copies 4}
+;;      {:title "W7e53u", :author "WF85", :copies 8}
+;;      {:title "9", :author "355fT", :copies 3}
+;;      {:title "37QW3", :author "g2ifC", :copies 7}]
+;;     [{:title "195HHa", :author "9", :copies 7}
+;;      {:title "m", :author "4j583P6qy9", :copies 3}
+;;      {:title "MNqIwA3", :author "7o5", :copies 7}
+;;      {:title "Q7rH9s7", :author "k9t1", :copies 1}
+;;      {:title "L", :author "N1362h", :copies 6}
+;;      {:title "yS1eNG", :author "0xC00jud", :copies 1}])
+#+end_src
+
+Lets get rid of empty vectors, aka, empty inventories
+#+begin_src clojure
+(gen/sample (gen/such-that not-empty (gen/vector book-gen)))
+;; => ([{:title "p2", :author "9d", :copies 1}]
+;;     [{:title "tLt4", :author "329", :copies 1}]
+;;     [{:title "I", :author "q8dQ", :copies 3}]
+;;     [{:title "5", :author "5V", :copies 1}]
+;;     [{:title "9eq", :author "00r4m", :copies 3}
+;;      {:title "I", :author "H6", :copies 6}]
+;;     [{:title "p", :author "0", :copies 2}]
+;;     [{:title "m628", :author "9qx", :copies 1}
+;;      {:title "s7h60pP", :author "Hp", :copies 2}
+;;      {:title "0V", :author "44me", :copies 6}]
+;;     [{:title "C1vs8H", :author "S7", :copies 1}
+;;      {:title "34p8G", :author "3hg", :copies 1}]
+;;     [{:title "948pp", :author "ZId2", :copies 4}
+;;      {:title "wCz7W", :author "0", :copies 6}
+;;      {:title "SLN42EdLI5", :author "iBLp", :copies 1}
+;;      {:title "1", :author "4VwE7", :copies 7}
+;;      {:title "7", :author "Ildxd1j5", :copies 7}
+;;      {:title "27n11", :author "81o1dw", :copies 3}
+;;      {:title "Sq1Ys2tG", :author "VbobU8H", :copies 8}
+;;      {:title "0jd", :author "5", :copies 6}]
+;;     [{:title "5j", :author "ga63AME", :copies 2}
+;;      {:title "CE", :author "6", :copies 9}
+;;      {:title "7", :author "wBP", :copies 3}])
+#+end_src
+
+~(gen/not-empty~ does the same as ~(gen/such-that not-empty~
+#+begin_src clojure
+(def inventory-gen (gen/not-empty (gen/vector book-gen)))
+;; => #'inventory.core/inventory-gen
+#+end_src
+
+Aside doubt: Are all simple Clojure maps implemented as hashmaps?
+
+Think again about what one testcase consists of:-
+- An inventory of books
+- One book from amongst them
+  
+To test our two functions,
+We also need a single book from each of the generated inventories.
+aka, we want to pluck a book from the inventory
+This can be done using ~gen/elements~
+#+begin_src clojure
+(gen/let [inventory inventory-gen
+          book (gen/elements inventory)]
+  {:inventory inventory :book book})
+;; => {:gen #function[clojure.test.check.generators/gen-bind/fn--5190]}
+#+end_src
+
+Lets bind it
+#+begin_src clojure
+(def inventory-and-book-gen (gen/let [inventory inventory-gen
+                                      book (gen/elements inventory)]
+                              {:inventory inventory :book book}))
+;; => #'inventory.core/inventory-and-book-gen
+#+end_src
+
+Try it
+#+begin_src clojure
+(gen/sample inventory-and-book-gen)
+;; => ({:inventory [{:title "7", :author "s", :copies 1}],
+;;      :book {:title "7", :author "s", :copies 1}}
+;;     {:inventory [{:title "u", :author "y", :copies 3}],
+;;      :book {:title "u", :author "y", :copies 3}}
+;;     {:inventory
+;;      [{:title "j", :author "Np", :copies 2}
+;;       {:title "mv", :author "7u", :copies 2}],
+;;      :book {:title "j", :author "Np", :copies 2}}
+;;     {:inventory
+;;      [{:title "g67", :author "2G5L", :copies 1}
+;;       {:title "2o1", :author "qvj", :copies 3}
+;;       {:title "Ej3", :author "y1", :copies 4}],
+;;      :book {:title "Ej3", :author "y1", :copies 4}}
+;;     {:inventory [{:title "a", :author "0h", :copies 3}],
+;;      :book {:title "a", :author "0h", :copies 3}}
+;;     {:inventory
+;;      [{:title "d", :author "Qlauo", :copies 5}
+;;       {:title "C8xMx", :author "6Z3", :copies 1}
+;;       {:title "SG", :author "lLb", :copies 5}],
+;;      :book {:title "SG", :author "lLb", :copies 5}}
+;;     {:inventory [{:title "sB", :author "xoQFL3P8", :copies 7}],
+;;      :book {:title "sB", :author "xoQFL3P8", :copies 7}}
+;;     {:inventory
+;;      [{:title "0oril", :author "hi7KX", :copies 5}
+;;       {:title "9C", :author "N1LqU", :copies 6}
+;;       {:title "ONg8", :author "wsMtv8v", :copies 1}
+;;       {:title "osN4333", :author "2VE", :copies 3}
+;;       {:title "t3", :author "VY", :copies 7}],
+;;      :book {:title "t3", :author "VY", :copies 7}}
+;;     {:inventory
+;;      [{:title "U47d3I40r", :author "li", :copies 7}
+;;       {:title "Lu2q2L4yC", :author "a", :copies 4}
+;;       {:title "Nys1Xa8J", :author "PY85", :copies 8}
+;;       {:title "zucCZ7p", :author "51t0uJvo", :copies 6}
+;;       {:title "E97O", :author "3", :copies 1}
+;;       {:title "8OH", :author "dvcX", :copies 7}
+;;       {:title "hQnfo1rs0", :author "AysSC8CK7", :copies 4}],
+;;      :book {:title "Nys1Xa8J", :author "PY85", :copies 8}}
+;;     {:inventory
+;;      [{:title "GVD1", :author "gbzb", :copies 1}
+;;       {:title "J1VYKsX", :author "SuImD", :copies 5}
+;;       {:title "Pg03A9vX6", :author "jYh9x8WU1", :copies 5}
+;;       {:title "4r8E8", :author "05PCga3", :copies 7}
+;;       {:title "DQ", :author "bsz7br8", :copies 10}],
+;;      :book {:title "4r8E8", :author "05PCga3", :copies 7}})
+#+end_src
+
+Now, we have completed generating the data for testing.
+** Checking Properties - aka Running Generated Testcases
+Aside: The author has more or less plagiarized [[https://clojure.github.io/test.check/intro.html][Introduction to test.check]]
+
+Let us take two toy examples to understand /expressing the property/ to be tested
+
+Each positive integer is smaller than the next positive integer
+#+begin_src clojure
+(require :reload '[clojure.test.check.properties :as prop])
+;; => nil
+#+end_src
+
+Lets express the property.
+
+Let us wire up an infinite number of testcases
+#+begin_src clojure
+(prop/for-all [i gen/pos-int]
+  (< i (inc i)))
+;; => {:gen #function[clojure.test.check.generators/gen-fmap/fn--5185]}
+#+end_src
+
+Lets limit the infinite number of cases to say 50
+~clojure.test.check/quick-check~ will randomly pick 50
+
+#+begin_src clojure
+(require :reload '[clojure.test.check :as tc])
+;; => nil
+#+end_src
+
+#+begin_src clojure
+(tc/quick-check 50
+  (prop/for-all [i gen/pos-int]
+    (< i (inc i))))
+;; => {:result true,
+;;     :pass? true,
+;;     :num-tests 50,
+;;     :time-elapsed-ms 1,
+;;     :seed 1723931317348}
+#+end_src
+---------------------------------------------------------------------------------------------------
+Let us apply what we learnt to check our book inventory:-
+#+begin_src clojure
+(require '[clojure.test.check.properties :as prop])
+(require '[clojure.test.check :as tc])
+(require '[inventory.core :as i])
+
+(tc/quick-check 50
+  (prop/for-all [i-and-b inventory-and-book-gen]
+    (= (i/find-by-title (->> i-and-b :book :title) (->> i-and-b :inventory))
+      (:book i-and-b))))
+;; => {:result true,
+;;     :pass? true,
+;;     :num-tests 50,
+;;     :time-elapsed-ms 71,
+;;     :seed 1723931998480}
+#+end_src
+
+Aside:- Below is valid too, because maps themselves are functions too
+#+begin_src clojure
+(tc/quick-check 50
+  (prop/for-all [i-and-b inventory-and-book-gen]
+    (= (i/find-by-title (-> i-and-b :book :title) (-> i-and-b :inventory))
+      (:book i-and-b))))
+;; => {:result true,
+;;     :pass? true,
+;;     :num-tests 50,
+;;     :time-elapsed-ms 63,
+;;     :seed 1723932041896}
+#+end_src
+
+If need be, we can integrate the above tests with clojure.test
+#+begin_src clojure :tangle ./inventory/test/inventory/core_gen_test.clj
+(require :reload '[clojure.test.check.properties :as prop])
+(require :reload '[clojure.test.check :as tc])
+(require :reload '[inventory.core :as i])
+(require :reload '[clojure.test.check.clojure-test :as ctest])
+
+(ctest/defspec find-by-title-finds-books 50
+  (prop/for-all [i-and-b inventory-and-book-gen]
+    (= (i/find-by-title (->> i-and-b :book :title) (->> i-and-b :inventory))
+      (:book i-and-b))))
+#+end_src
+** In the wild
+
+[[file:clojure/test/clojure/test_clojure/numbers.clj::(deftest test-add]]
+[[file:clojure/test/clojure/test_clojure/sequences.clj::(deftest test-cons]]
+
+~and~ is useful to build parameterized tests. Its a sister of ~(is~
+
+* Spec
 
 * File Settings
 :PROPERTIES:
