@@ -2292,7 +2292,263 @@ Korma SQL library
 ** Wrapping up
 Destructuring is soo  much better than ~first~-ing , ~rest~-ing, nth-ing till your head explodes 😀
 * Records and Protocols
-Recards are like maps, but specialized for a particular purpose.
+Records are +like+ maps, but specialized for a particular purpose.
+
+** Two troubles with Maps
+1. any key with any value, this flexibility => slow cod
+2. lack of coherence and documentation, Eg: A map name =watson= could be either of a fictional character or a supercomputer.
+
+** How to create a Record
+#+begin_src clojure
+(defrecord FictionalCharacter [name appears-in author])
+;; => user.FictionalCharacter
+#+end_src
+^This creates a record
+and two functions that help create instances:-
+~->FictionalCharacter~ & ~map->FictionalCharacter~
+#+begin_src clojure
+(def watson (->FictionalCharacter "John Watson" "Sherlock Holmes" "Doyle"))
+;; => #'user/watson
+#+end_src
+Or, create from a map
+#+begin_src clojure
+(def elizebeth (map->FictionalCharacter {:name "Elizebeth Bennet" :appears-in "Pride & Prejudice" :author "Austen"}))
+;; => #'user/elizebeth
+#+end_src
+
+** Records are Maps
+All map functions still work on records:-
+#+begin_src clojure
+(:name elizebeth)
+;; => "Elizebeth Bennet"
+(count elizebeth)
+;; => 3
+(keys watson)
+;; => (:name :appears-in :author)
+#+end_src
+
+You can modify records
+#+begin_src clojure
+(def specific-watson (assoc watson :appears-in "Bourge-villas"))
+;; => #'user/specific-watson
+specific-watson
+;; => {:name "John Watson", :appears-in "Bourge-villas", :author "Doyle"}
+#+end_src
+
+Aside, Doubt? Why *doesnt* ~specific-watson~ print as =user.FictionalCharacter{:name "John Watson", :appears-in "Sherlock Holmes", :author "Doyle"}=
+
+You can add /extra/ key value pair to a record
+They dont get the speed benefit though.
+#+begin_src clojure
+(def more-about-watson (assoc watson :address "211B Baker Street"))
+;; => #'user/more-about-watson
+#+end_src
+
+** Two advantages of Records
+They fix the two disadvantages of maps.
+1. faster
+2. makes code clearer. ie, watson and watson2 are distinguishable
+
+   #+begin_src clojure
+   (defrecord SuperComputer [cpu no-cpus storage-gb])
+   ;; => user.SuperComputer
+   (def watson2 (->SuperComputer "Power7" 2880 4000))
+   ;; => #'user/watson2
+
+   (class watson)
+   ;; => user.FictionalCharacter
+   (class watson2)
+   ;; => user.SuperComputer
+
+   (instance? SuperComputer watson2)
+   ;; => true
+   #+end_src
+BTW, ~class~ works on ALL values, not just records.
+Doubt, how is ~(class~ different from ~(type~
+---------------------------------------------------------------------------------------------------
+*Important Aside*
+*Dont do this*
+#+begin_src clojure
+;;never:-
+(defn process-thing [x]
+  (if (= (instance? FictionalCharacter x))
+    (process-fictional-character x)
+    (process-computer x)))
+#+end_src
+^above will surely lead to spaghetti code. (Aside: Does Lit-Knuth agree with this?)
+*Clojure's way of dealing with such type sensitive code is using Protocols*
+
+** Protocols
+#+begin_src clojure
+(defrecord Employee [first-name last-name department])
+;; => user.Employee
+(def alice (->Employee "Alice" "Smith" "Engineering"))
+;; => #'user/alice
+#+end_src
+
+Both =watson= and =alice= have a name.
+
+How can we treat both of them as people? Enter Protocols:-
+Make both of them implement the Person protocol.
+
+#+begin_src clojure
+(defprotocol Person
+  (full-name [this])
+  (greeting [this msg])
+  (description [this]))
+;; => Person
+#+end_src
+^Defines a protocol and  also creates *3 polymorphic functions*
+
+Aside:- Polymorphic fn = what they do depends on the type of their *first* argument
+
+Make both of them implement the Person protocol
+ie define the /methods/
+#+begin_src clojure
+(defrecord FictionalCharacter [name appears-in author]
+  Person
+  (full-name [this] (:name this))
+  (greeting [this msg] (str msg " " (:name this)))
+  (description [this] (str (:name this) " is a character in " (:appears-in this))))
+;; => user.FictionalCharacter
+
+(defrecord Employee [first-name last-name department]
+  Person
+  (full-name [this] (str first-name " " last-name))
+  (greeting [this msg] (str msg " " (:first-name this)))
+  (description [this] (str (:first-name this) " works in " (:department this))))
+;; => user.Employee
+#+end_src
+
+Lets create instances and try them all out:-
+#+begin_src clojure
+(def sofia (->Employee "Sofia" "Diego" "Finance"))
+;; => #'user/sofia
+(def sonny (->FictionalCharacter "Sonny Corleone" "The Godfather" "Puzo"))
+;; => #'user/sonny
+
+(full-name sofia)
+;; => "Sofia Diego"
+(full-name sonny)
+;; => "Sonny Corleone"
+
+(greeting sofia "Sayonara, ")
+;; => "Sayonara,  Sofia"
+(greeting sonny "Sayonara, ")
+;; => "Sayonara,  Sonny Corleone"
+
+(description sofia)
+;; => "Sofia works in Finance"
+(description sonny)
+;; => "Sonny Corleone is a character in The Godfather"
+#+end_src
+
+** Decentralized Polymorphism using ~extend-protocol~
+After you make a new protocol,
+#+begin_src clojure
+(defprotocol Marketable
+  (make-slogan [this]))
+;; => Marketable
+#+end_src
+
+you can extend *already defined* records to conform to this new protocol. Without touching their original definitions. Hence decentralized.
+
+Lets say we want to add a 'Marketing slogan' to each of our already defined Employee, FictionalCharacter and SuperComputer
+#+begin_src clojure
+(extend-protocol Marketable
+  Employee (make-slogan [e] (str (:first-name e) "is the BEST employee!"))
+  FictionalCharacter (make-slogan [fc] (str (:name fc) " is the GREATEST character!"))
+  SuperComputer (make-slogan [sc] (str "This computer has " (:no-cpus sc) " CPUs!")))
+;; => nil
+#+end_src
+
+You can even make data types that arent records to follow your protocol
+#+begin_src clojure
+(extend-protocol Marketable
+  String (make-slogan [s] (str \" s \" " is a string! WOW!"))
+  Boolean (make-slogan [b] (str b " is one of the two surviving Booleans!")))
+;; => nil
+#+end_src
+
+#+begin_src clojure
+(make-slogan sonny)
+;; => "Sonny Corleone is the GREATEST character!"
+(make-slogan true)
+;; => "true is one of the two surviving Booleans!"
+#+end_src
+
+ie Records and Protocols are decoupled
+they are independent of each other in time and ?space
+
+** Records-Protocols vs OOP
+Analogy/Resemblance:-
+Records ~ Classes
+Record instances ~ Objects
+Protocols ~ Abstract Interfaces
+
+Protocols are Clojure's riff on type-based polymorphism
+(Type-based polymorphism definition - the idea that you can have a single operation implemented in different ways by different types.)
+
+*But* differences:-
+Unlike objects, Record instances are immutable
+Unlike classes, Records have no concept of inheritance. ie there are no Super Record types.
+
+*Many significant Clojure programs dont feel the necessity for records and protocols*
+Therefore, *avoid premature usage of records and protocols, just use simple maps & functions*
+
+** Protocols vs Multimethods
+/One Similarity:-/
+both of them let you express Polymorphism
+
+/Two differences:-/
+Multimethods can branch out (dispatch) based on *any* criterion, not just /type/
+Protocols always branch out based on /type/
+
+Multimethods define a single operation
+Protocols refer to a collection of operations.
+
+/One Usage tip:-/
+Multimethod is a more generic concept than Protocols.
+Design choice: If Protocol suffices, avoid using a multimethod in its place.
+
+** In the wild
+Clostache templating library
+*Clostache library uses just ONE record type. It uses NO protocols, NO polymorphism. Its just simple maps and functions. I am sure it has many Github-stars and is widely used! This is typical of Clojure projects.*
+
+Stuart Sierra's Component library
+*It uses just ONE protocol*
+
+~reify~ creates a one-off protocol-instance without defining a protocol. Its helpful for testing purposes.
+Such instances are permitted to implement a protocol partially. ie, omit some methods.
+
+** Staying out of trouble
+*** Records
+When using ~(map->SomeRecord some_map)~, if you mis-name a key of its argument,
+that key-value pair will end up as an *extra key-value*. This missed key's value will be set to nil.
+tldr: carefully match argument keys with defrecord slot names.
+---------------------------------------------------------------------------------------------------
+Botched ~assoc~ due to similar mis-name of key will, similarly,
+result in an *extra key-value pair* and a nil-led pair.
+*** Protocols
+~defprotocol~ adds functions to the namespace. Be careful of function-name collisions with builtin functions.
+
+Two ~defprotocols~ might add function names that might collide with each other's.
+
+When in doubt, put each protocol in its own namespace.
+
+---------------------------------------------------------------------------------------------------
+Records have a more generic cousin0 named Types
+~deftype~
+A Record comes with a map and fast access etc.
+Whereas, a 'type' is more of a blank slate.
+
+*Types are almost never used in Clojure*
+** Wrapping up
+Records are specialized maps.
+Protocols are collection of functions, that can be used to define *polymorphic operatons /on/ records*
+* Tests
+Tests make sure your code works.
+
 * File Settings
 :PROPERTIES:
 :UNNUMBERED: t
