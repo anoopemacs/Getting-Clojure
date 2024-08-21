@@ -7,6 +7,12 @@
 Aside, Official docs:-
 [[file:cheatsheet-usletter-color.pdf]]
 [[file:clojure-api-docs/api-index.html]]
+* Part I ---------------------------------------------------------------------------------------------------
+:PROPERTIES:
+:UNNUMBERED: t
+:END:
+
+
 * Hello, Clojure
 ** The Very Basics
 #+begin_src clojure
@@ -1436,6 +1442,11 @@ Subsequent ~:reload~ refuses to re-run those bindings. This is helpful when you 
 *This marks the end of Part I - Basics -------------------------------------------------------------*
 Next starts *Part II - Intermediate*
 
+* Part II ---------------------------------------------------------------------------------------------------
+:PROPERTIES:
+:UNNUMBERED: t
+:END:
+
 * Sequences
 Clojure code *isnt* written with specificity to each collection type: map, set, vector, list
 It *is* written to a sequence_abstract_type0
@@ -2649,7 +2660,7 @@ Run those tests
 (require 'inventory.core-test)          ;?because tests arent loaded by default in a lein repl
 (require 'clojure.test)
 
-(ns inventory.core)                     ;select this ns
+(ns inventory.core-test)                     ;select this ns
 (clojure.test/run-tests)                ;runs all tests in current ns
 (clojure.test/run-tests *ns*)
 
@@ -2675,7 +2686,7 @@ External library name is ~test.check~
 Add ~[org.clojure/test.check "1.1.1"]~ to =project.clj=
 
 ~sample~ is hardcoded to return next 10 values from a generator
-#+begin_src clojure
+#+begin_src clojure :noweb-ref "Define the generator"
 (require '[clojure.test.check.generators :as gen])
 (gen/sample gen/string-alphanumeric)
 #+end_src
@@ -2690,7 +2701,7 @@ Start a cider repl inside the =inventory= folder
 Then connect to it using =M-x cider-connect= , pick localhost.
 
 We can get rid of empty string using ~gen/such-that~ that accepts a /predicate/ checker
-#+begin_src clojure
+#+begin_src clojure :noweb-ref "Define the generator"
 (def title-gen (gen/such-that not-empty gen/string-alphanumeric))
 ;; => #'inventory.core/title-gen
 (def author-gen (gen/such-that not-empty gen/string-alphanumeric))
@@ -2700,7 +2711,7 @@ We can get rid of empty string using ~gen/such-that~ that accepts a /predicate/ 
 #+end_src
 
 Above generators can be combined
-#+begin_src clojure
+#+begin_src clojure :noweb-ref "Define the generator"
 ;;lets build a book generator
 (def book-gen
   (gen/hash-map :title title-gen :author author-gen :copies copies-gen))
@@ -2787,7 +2798,7 @@ Lets get rid of empty vectors, aka, empty inventories
 #+end_src
 
 ~(gen/not-empty~ does the same as ~(gen/such-that not-empty~
-#+begin_src clojure
+#+begin_src clojure :noweb-ref "Define the generator"
 (def inventory-gen (gen/not-empty (gen/vector book-gen)))
 ;; => #'inventory.core/inventory-gen
 #+end_src
@@ -2810,7 +2821,7 @@ This can be done using ~gen/elements~
 #+end_src
 
 Lets bind it
-#+begin_src clojure
+#+begin_src clojure :noweb-ref "Define the generator"
 (def inventory-and-book-gen (gen/let [inventory inventory-gen
                                       book (gen/elements inventory)]
                               {:inventory inventory :book book}))
@@ -2939,16 +2950,33 @@ Aside:- Below is valid too, because maps themselves are functions too
 
 If need be, we can integrate the above tests with clojure.test
 #+begin_src clojure :tangle ./inventory/test/inventory/core_gen_test.clj
+(ns inventory.core-gen-test)
+
 (require :reload '[clojure.test.check.properties :as prop])
 (require :reload '[clojure.test.check :as tc])
 (require :reload '[inventory.core :as i])
 (require :reload '[clojure.test.check.clojure-test :as ctest])
+
+<<Define the generator>>
 
 (ctest/defspec find-by-title-finds-books 50
   (prop/for-all [i-and-b inventory-and-book-gen]
     (= (i/find-by-title (->> i-and-b :book :title) (->> i-and-b :inventory))
       (:book i-and-b))))
 #+end_src
+
+Run it
+#+begin_src clojure
+(find-by-title-finds-books)
+;; => {:result true,
+;;     :pass? true,
+;;     :num-tests 50,
+;;     :time-elapsed-ms 75,
+;;     :seed 1723985591822}
+#+end_src
+
+
+As ususal =lein test= will run all =clojure.test= in all namespaces.
 ** In the wild
 
 [[file:clojure/test/clojure/test_clojure/numbers.clj::(deftest test-add]]
@@ -2957,6 +2985,351 @@ If need be, we can integrate the above tests with clojure.test
 ~and~ is useful to build parameterized tests. Its a sister of ~(is~
 
 * Spec
+Clojure is more concerned with the shape of the data than its type.
+
+** ~clojure.spec/valid?~,  ~clojure.spec/or~,  ~clojure.spec/and~
+
+=clojure.spec= is a library  for verifying the shape of data.
+its kinda like a regular expression library for clojure data.
+
+#+begin_src clojure
+(ns inventory.core
+  (:require [clojure.spec.alpha :as s]))
+#+end_src
+^Above library comes bundled with Clojure language.
+
+#+begin_src clojure
+(s/valid? number? 44)
+;; => true
+(s/valid? number? :somekeyword)
+;; => false
+#+end_src
+~s/valid?~ accepts a predicate function
+We call those predicate functions as /a spec/
+
+~s/and~ and ~s/or~ helps build such predicate functions.
+
+=n= stands for =number=, not =not=
+#+begin_src clojure
+(def n-gt-10 (s/and number? #(> % 10)))
+;; => #'inventory.core/n-gt-10
+
+(s/valid? n-gt-10 1)
+;; => false
+(s/valid? n-gt-10 10)
+;; => false
+(s/valid? n-gt-10 11)
+;; => true
+#+end_src
+~n-gt-10~ is /a spec/
+
+#+begin_src clojure
+(def n-gt-10-lt-100 (s/and number? #(> % 10) #(< % 100)))
+;; => #'inventory.core/num-gt-10-lt-100
+(s/valid? n-gt-10-lt-100 55)
+;; => true
+#+end_src
+
+*The argument list to ~s/or~ has a twist*
+#+begin_src clojure
+;;wrong:-
+;;(def num-or-str (s/or number? string?))
+
+(def n-or-s (s/or :a-number number? :a-string string?))
+;; => #'inventory.core/num-or-str
+(s/valid? n-or-s "Hello")
+;; => true
+(s/valid? n-or-s 99)
+;; => true
+(s/valid? n-or-s true)
+;; => false
+#+end_src
+The keywords are required to give descriptive feedback whenever a spec fails.
+We call this as a spec with /descriptive keywords/
+
+~s/and~ and ~s/or~ accepts either of
+normal predicates or other specs.
+#+begin_src clojure
+(def n-gt-10-or-symbol (s/or :greater-10 n-gt-10 :a-symbol symbol?))
+#+end_src
+
+** Spec-ing collections
+#+begin_src clojure
+(def coll-of-strings (s/coll-of string?))
+;; => #'inventory.core/coll-of-strings
+(def coll-of-n-or-s (s/coll-of n-or-s))
+;; => #'inventory.core/coll-of-n-or-s
+#+end_src
+
+~s/cat~ helps build specs that say /this should follow that/ in a collection.
+Doubt:- Why is it named so?
+
+Four element collections of the form:- string, number, string, number
+#+begin_src clojure
+(def s-n-s-n (s/cat :s1 string? :n1 number? :s2 string? :n2 number?))
+;; => #'inventory.core/s-n-s-n
+(s/valid? s-n-s-n ["Emma" 1815 "Jaws" 1974])
+;; => true
+#+end_src
+---------------------------------------------------------------------------------------------------
+*** Specs for maps, for key existence:-
+#+begin_src clojure
+;;define the book spec
+(def book-s
+  (s/keys :req-un [:inventory.core/title
+                   :inventory.core/author
+                   :inventory.core/copies]))
+;; => #'inventory.core/book-s
+(s/valid? book-s {:title "Emma" :author "Austen" :copies 10})
+;; => true
+(s/valid? book-s {:title "Arabian Nights" :copies 17})
+;; => false
+
+;;additional keys are permitted
+(s/valid? book-s {:title "Emma" :author "Austen" :copies 10 :published 1968})
+;; => true
+#+end_src
+
+=:req-un= :-
+'-un' stands for unqualified keywords.
+ie We suppy qualified keywords to ~s/keys~ function, and ask it to look for unqualified keywords in the map.
+
+*** Why are fully qualified keywords used to define map specs?
+Specs are meant to be [[*Registering Specs][registered]] to a global registry.
+This means, we need to use fully qualified keynames.
+If not, there could be collisions in keywords.
+
+** Registering Specs
+After registering to a JVM wide registry, any code can use my specs.
+=clojure.spec/def= does the registration into the /global registry/
+(not to be confused with ~def!~)
+
+A spec is registered at a 'keyword'
+#+begin_src clojure
+(s/def :inventory.core/book
+  (s/keys :req-un [:inventory.core/title
+                   :inventory.core/author
+                   :inventory.core/copies]))
+;; => :inventory.core/book
+#+end_src
+Then on, you can use that keyword as a /spec/ globally
+#+begin_src clojure
+(s/valid? :inventory.core/book {:title "Dracula" :author "Stoker" :copies 10})
+;; => true
+#+end_src
+
+Recall that =::= is a shorthand for the current namespace,
+Therefore, above could also be re-written as:-
+#+begin_src clojure
+(s/def ::book
+  (s/keys :req-un [::title
+                   ::author
+                   ::copies]))
+;; => :inventory.core/book
+#+end_src
+
+However, above spec says nothing above the values associated with the keys in above map
+#+begin_src clojure
+(s/valid? ::book {:title 1234 :author false :copies "many"})
+;; => true
+#+end_src
+^Lets fix this
+** Specs for maps, for type of value:-
+
+We have already defined a spec for =:inventory.core/book=
+If we register a spec for each of the above map's keys,
+then ~s/valid?~ will automatically also ensure that the map's values match the above specs.
+#+begin_src clojure
+(s/def ::title string?)
+;; => :inventory.core/title
+(s/def ::author string?)
+;; => :inventory.core/author
+(s/def ::copies number?)
+;; => :inventory.core/copies
+(s/def ::book (s/keys :req-un [::title ::author ::copies]))
+;; => :inventory.core/book
+#+end_src
+
+#+begin_src clojure
+(s/valid? ::book {:title 1234 :author false :copies "many"})
+;; => false
+(s/valid? ::book {:title "Dracula" :author "Stoker" :copies 10})
+;; => true
+#+end_src
+** ~explain~-ing why a particular spec didnt match
+Output happens by a printout
+#+begin_src clojure :results output
+(s/explain n-gt-10 1)
+;; => nil
+#+end_src
+
+#+RESULTS:
+: 1 - failed: (> % 10)
+
+#+begin_src clojure :results output
+(s/valid? ::book {:author :austen :title :emma})
+;; => false
+(s/explain ::book {:author :austen :title :emma})
+;; => nil
+#+end_src
+
+#+RESULTS:
+: :austen - failed: string? in: [:author] at: [:author] spec: :inventory.core/author
+: :emma - failed: string? in: [:title] at: [:title] spec: :inventory.core/title
+: {:author :austen, :title :emma} - failed: (contains? % :copies) spec: :inventory.core/book
+
+---------------------------------------------------------------------------------------------------
+~conform~ is a nice truthy function:-
+If a spec fails, it returns the specific keyword =:clojure.spec.alpha/invalid=
+#+begin_src clojure
+(s/conform n-gt-10 1)
+;; => :clojure.spec.alpha/invalid
+#+end_src
+
+If it matches, it returns the value itself for simple specs &
+for specs with /descriptive keywords/
+returns a map of 'spec descriptive' keywords to collection values.
+#+begin_src clojure
+(s/conform number? 1968)
+;; => 1968
+(s/conform s-n-s-n ["Emma" 1815 "Jaws" 1974])
+;; => {:s1 "Emma", :n1 1815, :s2 "Jaws", :n2 1974}
+#+end_src
+** Function specs
+Above facilitates a spec matching at critical points in your code
+*** Choice1
+~:pre~ and ~:post~ keywords inside ~defn~
+
+Let us say we want to ensure the shape of ~:title~ and ~:inventory~ passed to the ~find-by-title~ function:-
+#+begin_src clojure
+(s/def ::inventory (s/coll-of ::book))
+;; => :inventory.core/inventory
+
+(defn find-by-title
+  "Search for a book by title, where title is a string and books is a collection of book maps, each of which must have a :title entry"
+  [title books]
+  {:pre [(s/valid? ::title title)
+         (s/valid? ::inventory books)]}
+  (some #(if (= (:title %) title) %) books))
+;; => #'inventory.core/find-by-title
+#+end_src
+*** Choice2
+Keeps the spec seperate from the ~defn~
+#+begin_src clojure
+(defn find-by-title [title books]
+  (some #(if (= (:title %) title) %) books))
+;; => #'inventory.core/find-by-title
+#+end_src
+
+Register a spec for the above function using ~fdef~
+#+begin_src clojure
+(s/fdef find-by-title
+  :args (s/cat :title ::title :inventory ::inventory))
+;; => inventory.core/find-by-title
+#+end_src
+Mnemonic to remember ~fdef~ ,   ''Final-specs-def will be registered"
+
+?Unlike ~:pre~ and ~:post~, we need to turn on the above wired up specs
+#+begin_src clojure
+(require '[clojure.spec.test.alpha :as st])
+;; => nil
+(st/instrument 'inventory.core/find-by-title)
+;; => [inventory.core/find-by-title]
+#+end_src
+
+See it in action
+#+begin_src clojure
+(find-by-title "Emma" ["Emma" "2001" "Jaws"])
+;; => Execution error - invalid arguments to inventory.core/find-by-title at (form-init3142513827429707114.clj:253).
+;;    "Emma" - failed: map? at: [:inventory] spec: :inventory.core/book
+;;    "2001" - failed: map? at: [:inventory] spec: :inventory.core/book
+;;    "Jaws" - failed: map? at: [:inventory] spec: :inventory.core/book
+#+end_src
+
+Spec based things can slow things down in production.
+Prefer to use it only during development and testing.
+** Generative tests that use the specs to auto generate test cases
+Specs provides sufficient information to generate a random test case.
+
+Lets say we want to test the below function
+#+begin_src clojure
+(defn book-blurb [book]
+  (str "The best selling book " (:title book) " by " (:author book)))
+;; => #'inventory.core/book-blurb
+#+end_src
+
+Lets wire up a test using /choice2/
+#+begin_src clojure
+(s/fdef book-blurb
+  :args (s/cat :book ::book))
+;; => inventory.core/book-blurb
+#+end_src
+
+=clojure.spec.test.alpha/check=
+will generate 1000 random testcases and run them
+#+begin_src clojure :results output
+(require '[clojure.spec.test.alpha :as st])
+;; => nil
+(st/check 'inventory.core/book-blurb)
+;; => ({:spec #object[clojure.spec.alpha$fspec_impl$reify__2518 0x56f46dc8 "clojure.spec.alpha$fspec_impl$reify__2518@56f46dc8"], :clojure.spec.test.check/ret {:result true, :pass? true, :num-tests 1000, :time-elapsed-ms 331, :seed 1724187907172}, :sym inventory.core/book-blurb2})
+#+end_src
+---------------------------------------------------------------------------------------------------
+
+*** =:ret= check the return value
+#+begin_src clojure
+(s/fdef book-blurb
+  :args (s/cat :book ::book)
+  :ret (s/and string? (partial re-find #"The best selling")))
+;; => inventory.core/book-blurb
+#+end_src
+
+Run it
+#+begin_src clojure
+(st/check 'inventory.core/book-blurb)
+;; => ({:spec #object[clojure.spec.alpha$fspec_impl$reify__2518 0x451e7e8a "clojure.spec.alpha$fspec_impl$reify__2518@451e7e8a"], :clojure.spec.test.check/ret {:result true, :pass? true, :num-tests 1000, :time-elapsed-ms 418, :seed 1724187834720}, :sym inventory.core/book-blurb})
+#+end_src
+---------------------------------------------------------------------------------------------------
+*** The =:fn= key gets handed a map
+~{:args <>, :ret <>}~ containing both the function arguments and the return value.
+Lets add a predicate for that map
+#+begin_src clojure
+;;Ensures that the authors name is part of the blurb output
+(defn check-args-and-return [{:keys [args ret]}]
+  ;;Since we have access to both the ret and the args
+  ;;we can write tests that use both the above as parameters
+
+  ;;Eg: check that arg-string is part of the ret-string:-
+  (let [author (-> args :book :author)]
+    (not (neg? (.indexOf ret author))))
+  )
+;; => #'inventory.core/check-args-and-return
+
+(s/fdef book-blurb
+  :args (s/cat :book ::book)
+  :ret (s/and string? (partial re-find #"The best selling"))
+  :fn check-args-and-return)
+;; => inventory.core/book-blurb
+#+end_src
+
+Run it
+#+begin_src clojure
+(st/check 'inventory.core/book-blurb)
+;; => ({:spec #object[clojure.spec.alpha$fspec_impl$reify__2518 0x1c8bd1cd "clojure.spec.alpha$fspec_impl$reify__2518@1c8bd1cd"], :clojure.spec.test.check/ret {:result true, :pass? true, :num-tests 1000, :time-elapsed-ms 364, :seed 1724188840826}, :sym inventory.core/book-blurb})
+#+end_src
+** Staying out of trouble
+If your architecture consists of multiple JVM, ensure to register your specs in each of them.
+** In the wild
+=ring-spec= contains specs for Ring web applicaiton
+
+=clojure.specs.alpha= contains specs for Clojure itself
+~s/?~ makes the next part of the spec optional.
+
+* Part III ---------------------------------------------------------------------------------------------------
+:PROPERTIES:
+:UNNUMBERED: t
+:END:
+
+* Interoperating with Java
 
 * File Settings
 :PROPERTIES:
