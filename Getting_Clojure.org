@@ -3330,7 +3330,335 @@ If your architecture consists of multiple JVM, ensure to register your specs in 
 :END:
 
 * Interoperating with Java
+In Java we use classes to make objects
+       we use objects to make things happen
 
+** A peek at Java
+Java is all about objects.
+
+Class -> Object
+There is a /constructor/ method in each class that runs at object creation.
+
+#+begin_src java
+public class Book {
+    public String title;
+    public String author;
+    public int numberChapters;
+
+    //The constructor method
+    public Book(String t, String a, String nChaps) {
+        title = t;
+        author = a;
+        numberChapters = numChaps;
+    }
+}
+#+end_src
+
+1. Most of the functionality in Java is bundled as methods. Eg: ~publish~, ~payRoyalties~
+
+2. Above way of exposing data fields using ~public~ is bad.
+   Prefer a getter and setter
+#+begin_src java
+public class Book {
+    private String title;
+    private String author;
+    private int numberChapters;
+
+    //The constructor method
+    public Book(String t, String a, String nChaps) {
+        title = t;
+        author = a;
+        numberChapters = numChaps;
+    }
+    //^Notice that its return type isnt set
+    
+    public void publish() {
+        // Do something to publish the book
+    }
+
+    public void payRoyalties() {
+        // Do something to pay royalties
+    }
+
+    //Getter and Setter methods to make fields accessible from outside the class
+    public String getTitle() {
+        return title;          //optionally could have written it as:- this.title
+    }
+    public String getAuthor() {
+        return author;
+    }
+    public int getNumberChapters() {
+        return numberChapters;
+    }
+}
+#+end_src
+
+^Terminology:-
+~t, a, nChaps~ are called as /parameters to the constructor/
+~title, author, numberChapters~ are called as /class attributes/
+
+---------------------------------------------------------------------------------------------------
+Java organizes classes into an Inheritance tree.
+Every class has a parent, aka /superclass/
+Only the topmost class of this tree:  =java.lang.Object=, has no parent
+
+#+begin_src java
+public class Rectangle {
+    private int length;
+    private int breadth;
+    public Rectangle(int l, int b) {
+        length = l;
+        breadth = b;
+    }
+}
+
+public class Square extends Rectangle {
+    private int side; // L=B=side
+    public Square(int s) {
+        side = s;
+        super(side, side);
+    }
+}
+#+end_src
+
+---------------------------------------------------------------------------------------------------
+A group of classes are bundled as a /package/. These are analogous to Clojure namespaces.
+#+begin_src java
+package com.anup.mygeometry;
+
+public class Rectangle {
+  ...
+}
+
+public class Square extends Rectangle {
+  ...
+}
+#+end_src
+
+** And Back to Clojure
+Using Java from Clojure, an example: =java.io.File=
+
+While calling the Java constructor, notice the *dot* at the end of the classname
+#+begin_src clojure :results output
+(def authors (java.io.File. "authors.txt"))
+;; => #'user/authors
+
+(if (.exists authors)
+  (println "Our authors file is there")
+  (println "Our authors file is missing"))
+
+(if (.canRead authors)
+  (println "We can read it"))
+#+end_src
+
+#+RESULTS:
+| Our authors file is there |
+| We can read it            |
+
+change permissions
+#+begin_src clojure
+(.setReadable authors true)
+;; => true
+#+end_src
+^Notice that we call a method with the object/instance as the first argument,
+and method parameters as arguments 2,3,4...etc.
+
+The method name is prefixed with a *dot*
+
+---------------------------------------------------------------------------------------------------
+Accessing java object's public fields, =(.-<field> <instance>)=
+Eg
+#+begin_src clojure
+(def rect (java.awt.Rectangle. 0 0 10 20))
+;; => #'user/rect
+
+(.-width rect)
+;; => 10
+(.-height rect)
+;; => 20
+#+end_src
+
+** ~(:import~ Packages
+Importing Java classes lets us do away with always requiring fully qualified classnames
+#+begin_src clojure
+(ns read-authors
+  (:import java.io.File))
+;; => nil
+
+;;Henceforth, no need to write the full java.io.File verbose name:-
+(File. "authors.txt")
+;; => #object[java.io.File 0x3e070441 "authors.txt"]
+#+end_src
+No quoting is needed to the argument passed to ~:import~
+
+^Its repl equivalent:-
+#+begin_src clojure
+(import java.io.File)
+#+end_src
+^no quoting needed for argument
+
+These are analogous to ~:require~ and ~(require~ that were used for loading Clojure namespaces.
+
+---------------------------------------------------------------------------------------------------
+Importing multiple classes from the same java package
+#+begin_src clojure
+(ns read-authors
+  (:import (java.io File InputStream)))
+#+end_src
+^no quoting needed for argument seq
+
+or, in the repl as
+#+begin_src clojure
+(import '(java.io File InputStream))
+#+end_src
+^quoting is needed.
+---------------------------------------------------------------------------------------------------
+Clojure automatically imports all classes in =java.lang= into *all* namespaces.
+#+begin_src clojure
+String
+;; => java.lang.String
+Boolean
+;; => java.lang.Boolean
+#+end_src
+
+** Class methods and Class fields
+aka /static methods/ and /static fields/
+
+?For Metaprogramming facility,
+java classes themselves are instances of a class called =java.lang.Class=
+
+Static methods and static fields are both accessed by the same syntax:
+=<classname>/<field or method name>=
+Eg:-
+#+begin_src clojure
+(ns read-authors
+  (:import java.io.File))
+;; => nil
+(File/separator)
+;; => "/"
+
+(File/createTempFile "authors_list" ".txt")
+;; => #object[java.io.File 0x7d908e33 "/tmp/authors_list7852999848716380022.txt"]
+#+end_src
+
+** In the wild (Important)
+*** Exploring a Java library's API
+Eg:- Google Gson library
+Include the library in =project.clj=
+
+*REPL* is a great place to explore a java library,
+alongside reading that library's documentation.
+
+#+begin_src clojure
+(import com.google.gson.Gson)
+;; => com.google.gson.Gson
+
+(def gson-obj (Gson.))
+;; => #'exploregson.core/gson-obj
+(.toJson gson-obj 44)      ;;its Java equivalent is gson-obj.toJson(44)
+;; => "44"
+(.toJson gson-obj {:title "1984" :author "Orwell"})
+;; => "{\":title\":\"1984\",\":author\":\"Orwell\"}"
+#+end_src
+*** Exploring Clojure implementation in Java
+At its very basic,
+1. Clojure is just a collection of Java classes.
+2. Every Clojure value is just a reference to some Java object.
+
+This =2= is the reason why we can pass Clojure values as parameters to Java methods.
+---------------------------------------------------------------------------------------------------
+
+If a Clojure value is just an instance of some Java object,
+then,
+We should be able to call Java methods of that Java class on a Clojure value:-
+#+begin_src clojure
+(def v [1 2 3])
+;; => #'exploregson.core/v
+(.count v)
+;; => 3
+#+end_src
+*^The implication is beautiful:- We can explore Clojure itself using Clojure*
+---------------------------------------------------------------------------------------------------
+This also explains the code from Chapter 5
+#+begin_src clojure
+(ns user)
+;; => nil
+
+(def author "Dickens")                  ;Make a var
+;; => #'user/author
+(def the-var #'author)                  ;Grab the var
+;; => #'user/the-var
+
+(.get the-var)                          ;Pull the value out of the var
+;; => "Dickens"
+
+(.-sym the-var)                         ;Pull the symbol out of the var
+;; => author
+#+end_src
+---------------------------------------------------------------------------------------------------
+Lets explore the random question:- /What do I get back from a cons/?
+#+begin_src clojure
+(def c (cons 99 [1 2 3]))
+;; => #'user/c
+(class c)
+;; => clojure.lang.Cons
+#+end_src
+So, I need to read this Java file:- [[file:./clojure/src/jvm/clojure/lang/Cons.java]]
+I see Java methods in that file,
+let me call them and see what happens
+#+begin_src clojure
+(.first c)
+;; => 99
+(.more c)
+;; => (1 2 3)
+#+end_src
+^In this way, slowly explore Clojure's implementation.
+** Staying Out of Trouble (Important)
+=.some_java_method=
+and
+=SomeClass/some_static_java_method=
+are not the same as Clojure functions.
+They are /special forms/
+They are not first class.
+
+---------------------------------------------------------------------------------------------------
+
+~memfn~ can turn a java method into a clojure function.
+#+begin_src clojure
+(ns read-authors
+  (:import java.io.File))
+;; => nil
+(def files [(File. "authors.txt") (File. "titles.txt")])
+;; => #'read-authors/files
+(map (memfn exists) files)
+;; => (true false)
+
+(memfn abrakadabra)
+;; => #function[read-authors/eval8180/fn--8181]
+(memfn exists)
+;; => #function[read-authors/eval8185/fn--8186]
+#+end_src
+---------------------------------------------------------------------------------------------------
+
+Dont un-necessarily wrap java methods into clojure functions.
+Just directly call the java method.
+*Interop* is native Clojure. Use it.
+So, directly call the Playwright Java functions when implementing AppStoreRank.
+---------------------------------------------------------------------------------------------------
+Unlike Clojure, many java objects are mutable.
+Lets say you are forced to deal with mutable Java objects.
+Eg:- Some Java API returns a mutable object
+Try to turn it into an immutable Clojure value.
+
+Eg:-
+Lets say the Java API returns a =java.util.Vector= mutable type
+Say, a vector named anup-favorite-books
+#+begin_src clojure
+(def immutable-anup-favorite-books (vec anup-favorite-books))
+#+end_src
+Just like that, you are back in the beautiful immutable world.
+** Wrapping up
+nil
 * File Settings
 :PROPERTIES:
 :UNNUMBERED: t
