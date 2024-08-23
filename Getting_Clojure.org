@@ -2251,6 +2251,8 @@ So, we need to capture both
 #+end_src
 Just remember the syntax ~:as character~ within  the flower brackets
 
+[[xournalpp:double-dot-as.xopp]]
+
 ** Staying out of trouble
 Whenever you want to dive very deep:-
 1. Drill down in *multiple stages, with descriptive intermediate names* (intention-revealing names)
@@ -3917,10 +3919,182 @@ Solution 2: Mark your threads as daemons. Caution, Daemons will be terminated wi
 
 Compojure routing library usage. (Come back to this after reading the Web development with Clojure book)
 
-~clojure.core/pmap~ is like ~map~ but runs each in a separte thread.
+~clojure.core/pmap~ is like ~map~ but runs each in a separate thread.
+There is a toy-my-pmap implementation, alongside *important discussion on using ~doall~ to stop the lazyness of ~map~ in its implementation*
 
 ** Wrapping up
 nil
+* State
+Since vectors are immutable, you cant just change the fifth element of some vector.
+
+But, how to model immutable real world.
+Introducing atoms, refs and agents
+
+** Atom
+Lets model a visitor counter to our webapp
+#+begin_src clojure
+(def counter (atom 0))
+;; => #'user/counter
+(defn greeting-message [req]
+  (swap! counter inc)
+  (if (= @counter 10)
+    (str "Congrats! you are the " @counter " visitor!")
+    (str "Welcome to Blotts Books!")))
+;; => #'user/greeting-message
+(greeting-message {})
+;; => "Welcome to Blotts Books!"
+#+end_src
+
+Additional arguments to the state modification function can be passed,
+Eg:- Count each visit as 12 visits to cheat my VCs:- ~(swap! counter + 12)~
+
+~swap!~ is thread safe:-
+After completing an update, it re-reads the old value of counter
+If, it has changed (due to another thread), then swap! will re-run.
+ie, We say that an atom is thread safe.
+
+*Note*
+Although you have to deref the atom when, say, used as an argument to ~str~
+You *dont* have to deref it when passed as an argument to ~swap!~
+ie you must not do +~(swap! @counter + 12)~+
+
+** Wrapping Map in an Atom
+You can wrap any Clojure value in an atom.
+#+begin_src clojure
+(ns inventory)
+;; => nil
+(def by-title (atom {}))
+;; => #'inventory/by-title
+(defn add-book [{title :title :as book}]
+  (swap! by-title #(assoc % title book)))
+;; => #'inventory/add-book
+(defn del-book [title]
+  (swap! by-title #(dissoc % title)))
+;; => #'inventory/del-book
+(defn find-book [title]
+  (get @by-title title))
+;; => #'inventory/find-book
+#+end_src
+
+Lets use them
+#+begin_src clojure
+(add-book {:title "Emma" :author "Austen"})
+;; => {"Emma" {:title "Emma", :author "Austen"}}
+by-title
+;; => #<Atom@4730704a: {"Emma" {:title "Emma", :author "Austen"}}>
+(add-book {:title "Hackers&Painters" :author "PaulGraham"})
+;; => {"Emma" {:title "Emma", :author "Austen"},
+;;     "Hackers&Painters" {:title "Hackers&Painters", :author "PaulGraham"}}
+(del-book "Hackers&Painters")
+;; => {"Emma" {:title "Emma", :author "Austen"}}
+(find-book "Emma")
+;; => {:title "Emma", :author "Austen"}
+(find-book "Bla")
+;; => nil
+#+end_src
+
+** Ref - a bunch of related atoms
+Lets say we have two atoms:- total-num-of-books and inventory
+Whenever inventory mutates, we want to mutate total-num-of-books
+
+We could use ~swap!~ twice.
+But, after the first ~swap!~, our state is false until second ~swap!~ runs.
+What we really need is a way to mutate both the above atoms together. Enter /ref/
+
+#+begin_src clojure
+(ns inventory)
+;; => nil
+(def by-title (ref {}))
+;; => #'inventory/by-title
+(def total-copies (ref 0))
+;; => #'inventory/total-copies
+
+;; Each book is of the format {:title "Emma" :author "Austen" :copies 17}
+;; by-title is an inventory where the key is the title, and the value is the above individual book-map
+(defn add-book [{title :title :as book}]
+  (dosync
+    (alter by-title #(assoc % title book))
+    (alter total-copies + (:copies book))))
+;; => #'inventory/add-book
+#+end_src
+
+Like atom, ref is also thread-safe
+
+** Agent
+What if we want to do a side effect whenever a mutable value changes
+ie
+our update function that we passed to ~swap!~ or ~alter~ needs to do one-side effect as it mutates
+
+Atoms and Refs dont gurantee that the update function runs only once. (because of thread safe check and rerun logic)
+
+Enter /agent/ and ~send~
+
+~send~ accepts the same arguments as ~swap!~ and ~alter~
+#+begin_src clojure
+(ns inventory)
+;; => nil
+(def by-title (agent {}))
+;; => #'inventory/by-title
+
+(defn add-book [{title :title :as book}]
+  (send by-title
+    (fn [by-title-map]                  ;;we could have written this as a #(...) aka lambda as well
+      (notify-inventory-change :add book) ;;this function has side effects, which we want to run guranteed-once.
+      (assoc by-title-map title book))))
+#+end_src
+
+~swap!~, ~alter~ : are synchronous
+~send~ is asynchronous
+
+** Which container to reach for to model some value?
+Rules:-
+1. If the value is mostly stable, prefer a var
+   with thread local changes, use dynamic var
+2. If there are side effects that need to happen whenever the value changes
+   use agent
+3. If there are multiple values that need to update together
+   use ref
+4. If there is a single value that mutates
+   use atom
+   Prefer using an atom over going for the more specialized /mutable value containers./
+
+** In the wild
+LightTable's Clojure language plugin uses /atom/
+
+Clojure's builtin ~memoize~ implementation uses /atom/
+
+Overtone:-
+Introduces ~ref-set~, ~ensure~
+
+Overtone has a mind-bending example of agent. Come back to this later.
+
+** Staying out of trouble
+#+begin_src clojure
+(def title-atom (atom "Pride and Prejudice"))
+;; => #'inventory/title-atom
+(swap! title-atom #(str % " and Zombies"))
+;; => "Pride and Prejudice and Zombies"
+title-atom
+;; => #<Atom@365d7870: "Pride and Prejudice and Zombies">
+#+end_src
+
+~title-atom~ is pointing to a /mutable value container/
+This pointing doesnt change
+?aka, title-atom itself hasnt been mutated.
+
+But the value stored in the container changes
+---------------------------------------------------------------------------------------------------
+Some commentary on how exceptions are raised should an update fail, for atom, ref, agent
+For agent, the behaviour is different. (see book for details)
+Introduces ~agent-error~, ~restart-agent~ functions
+---------------------------------------------------------------------------------------------------
+~shutdown-agents~
+
+** Wrapping up
+nil
+
+* Read and Eval
+In the chapter, we learn the reason behind Clojure's lispy0 syntax.
 
 * File Settings
 :PROPERTIES:
