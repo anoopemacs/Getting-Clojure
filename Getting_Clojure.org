@@ -1184,6 +1184,7 @@ Vars are mutable in Clojure. This is helpful during development.
 But, in production, respect the convention of not changing a var once its defined.
 Aka, never change a once defined ~def~ and  ~defn~
 
+dynamic-var
 #+begin_src clojure
 ;;Make a dynmic-var
 (def ^:dynamic *debug-enabled* false)
@@ -3659,6 +3660,268 @@ Say, a vector named anup-favorite-books
 Just like that, you are back in the beautiful immutable world.
 ** Wrapping up
 nil
+* Threads, Promises and Futures
+We will learn how to use Java threads from Clojure.
+
+?Doubt: Does ~-main~ prefixed by a dash imply that it is supposed to be compiled?
+WTF is meant by compiling in Java land?
+Is Java a compiled language?
+
+This chapter and the next are closely related.
+Threads and mutable State.
+
+** Great Power
+BTW, every Clojure program runs on some java thread, called the single main thread.
+
+~java.lang.Thread~ , its ~.start~ method:-
+#+begin_src clojure :results output
+(defn do-something-in-a-thread []
+  (println  "Hello from the thread")
+  (Thread/sleep 3000)
+  (println "Good bye from the thread"))
+;; => #'user/do-something-in-a-thread
+
+(def the-thread (Thread. do-something-in-a-thread))
+;; => #'user/the-thread
+
+(.start the-thread)
+(println "The main thread")
+#+end_src
+
+#+RESULTS:
+| Hello from the thread |
+| The main thread       |
+
+^Org babel doesnt handle the last print gracefully.
+Run it in a repl, and you will see a delayed goodbye printout after the above two printouts.
+
+~Thread.~ constructor accepts any object that implements the ~Runnable~ interface.
+Conveniently, all Clojure functions implement the ~Runnable~ interface.
+ie ~do-something-in-a-thread~ is a valid argument to ~Thread.~
+
+The call to ~.start~ will run a thread separate from the main thread.
+
+** Great Responsibility
+Race conditions can occur when multiple threads access/modify a mutable object.
+File systems, Database tables..etc are mutable.
+
+** Good fences make happy threads
+#+begin_src clojure
+(def inventory [{:title "Emma" :sold 51 :revenue 255}
+                {:title "2001" :sold 17 :revenue 170}])
+;; => #'user/inventory
+#+end_src
+
+Lets say we wanted to run some computations of total sales and total revenue,
+in parallel threads
+#+begin_src clojure
+(.start (Thread. (sum-copies-sold inventory))) ;I suspect a syntax error in this and next line
+(.start (Thread. (sum-revenue inventory)))     ;in the argument to Thread.
+#+end_src
+Since we know that ~inventory~ is immutable,
+it gives us a lot of confidence to pass it around to different threads without any worry.
+
+Aside:- Notice that ~Thread.~ accepts a function name if it has no arguments, and,
+       a bracketed function call along with arguments if there are.
+Doubt:-
+[[xournalpp:Thread constructor argument doubt.xopp]]
+Therefore, the proper syntax should have been
+#+begin_src clojure
+(.start (Thread. #(sum-copies-sold inventory))) ;notice the hash
+(.start (Thread. #(sum-revenue inventory)))     
+#+end_src
+
+---------------------------------------------------------------------------------------------------
+Recall the dynamic vars that we learn in Chapter 8,
+Since their value changes only inside a ~binding~,
+they play well with threads.
+Eg:-
+#+begin_src clojure :results output
+(def ^:dynamic *favorite-book* "Oliver Twist")
+;; => #'user/*favorite-book*
+(def thread-1 (Thread. #(binding [*favorite-book* "2001"]
+                          (println "My favorite book is" *favorite-book*))))
+;; => #'user/thread-1
+
+(def thread-2 (Thread. #(binding [*favorite-book* "Emma"]
+                          (println "My favorite book is" *favorite-book*))))
+;; => #'user/thread-2
+
+(.start thread-1)
+(.start thread-2)
+#+end_src
+
+#+RESULTS:
+| My favorite book is 2001 |
+| My favorite book is Emma |
+
+At the start of both the threads, "Oliver Twist" remains the initial value of the dynamic var.
+ie, one of the threads doesnt conflict with the other.
+---------------------------------------------------------------------------------------------------
+Therefore,
+the immtuability and per-thread dynamic variable binding helps us avoid race conditions.
+
+** Promise
+
+Related Aside:-
+~join~ lets you wait until the thread passed to it finishes.
+#+begin_src clojure
+(def del-thread (Thread. #(Thread/sleep 3000)))
+;; => #'user/del-thread
+(.start del-thread)                     ;starts the thread in the background
+;; => nil
+(.join del-thread)                      ;pauses the main thread until above thread finishes
+;; => nil
+#+end_src
+
+~promise~ is a lot more practical than ~join~
+---------------------------------------------------------------------------------------------------
+The ~promise~ is a value trap that is *initially empty*,
+and through ~deliver~ you can set the value of that empty slot.
+#+begin_src clojure
+(def a-promise (promise))
+;; => #'user/a-promise
+a-promise
+;; => #<Promise@6179a15f: :not-delivered>
+(deliver a-promise "Bla bla bla")
+;; => #<Promise@6179a15f: "Bla bla bla">
+a-promise
+;; => #<Promise@6179a15f: "Bla bla bla">
+a-promise
+;; => #<Promise@6179a15f: "Bla bla bla">
+#+end_src
+Henceforth, ~a-promise~ continues to carry the value "Bla bla bla"
+---------------------------------------------------------------------------------------------------
+~(deref~ and ~@~ can get at the value stored in a promise
+#+begin_src clojure
+(deref a-promise)
+;; => "Bla bla bla"
+(identity @a-promise)
+;; => "Bla bla bla"
+#+end_src
+
+*Important feature of a promise*
+A deref or @ will pause until there is a value.
+This feature can be used to control waiting until certain thread returns.
+Eg:-
+#+begin_src clojure
+(def inventory [{:title "Emma" :sold 51 :revenue 255}
+                {:title "2001" :sold 17 :revenue 170}])
+;; => #'user/inventory
+(defn sum-copies-sold [inv]
+  (apply + (map :sold inv)))
+;; => #'user/sum-copies-sold
+(defn sum-revenue [inv]
+  (apply + (map :revenue inv)))
+;; => #'user/sum-revenue
+#+end_src
+
+Try1 (fail)
+#+begin_src clojure
+(def copies-thread (Thread. #(sum-copies-sold inventory)))
+;; => #'user/copies-thread
+(def revenue-thread (Thread. #(sum-revenue inventory)))
+;; => #'user/revenue-thread
+#+end_src
+But, how the fuck do I ensure that both of those threads complete.
+
+1. Lets say we want to run copies and revenue threads
+2. Then we want to wait till both of them complete
+3. Then we want to print the results
+Steps 2 and 3 are accomplished by deref.
+
+Try2 (success)
+#+begin_src clojure
+(let [copies-promise (promise)
+      revenue-promise (promise)]
+  (.start (Thread. #(deliver copies-promise (sum-copies-sold inventory))))
+  (.start (Thread. #(deliver revenue-promise (sum-revenue inventory))))
+
+  (str "The total number of books sold is " @copies-promise " and total revenue is " @revenue-promise)
+  )
+;; => "The total number of books sold is 68 and total revenue is 425"
+#+end_src
+The deref ensure that ~str~ wont start until both the threads complete.
+
+** A value with a Future
+
+Firing off a computation in another thread, then getting its result back through a promise is a very common pattern.
+There is a prepackaged helper for this pattern:
+~future~
+
+You can think of a future as a promise that comes with its own thread.
+
+#+begin_src clojure
+(def revenue-future (future (apply + (map :revenue inventory))))
+;; => #'user/revenue-future
+#+end_src
+
+A future can be de-referenced using =@=
+#+begin_src clojure
+(identity @revenue-future)
+;; => 425
+#+end_src
+
+** Staying out of Trouble
+Some problems with threads:-
+
+Two threads may fight over a mutable resource
+
+Threads are expensive. Creating them takes time. Once created, they take up a reasonable space in memory.
+---------------------------------------------------------------------------------------------------
+Prefer to use ~future~ over manually creating ~Thread.~
+Because, ~future~ takes marking the space occupied by its internal thread for garbage collection.
+---------------------------------------------------------------------------------------------------
+Consider using the threadpool facility provided by ~java.util.concurrent.Executors~
+#+begin_src clojure
+(import java.util.concurrent.Executors)
+;; => java.util.concurrent.Executors
+(def fixed-pool (Executors/newFixedThreadPool 3))
+;; => #'user/fixed-pool
+
+(defn a-lot-of-work []
+  (println "Inside the function, a lot of work")
+  (Thread/sleep 1000))
+;; => #'user/a-lot-of-work
+(defn even-more-work []
+  (println "Inside the function, even more work")
+  (Thread/sleep 1000))
+;; => #'user/even-more-work
+
+(.execute fixed-pool a-lot-of-work)
+;; => nil
+(.execute  fixed-pool even-more-work)
+;; => nil
+#+end_src
+There are more specialized types of threadpools available.
+---------------------------------------------------------------------------------------------------
+A deref waits until some thread finishes.
+However, if the thread fails to return, then your program hangs forever.
+Therefore, always provide a timeout with a default value if time exceeded.
+#+begin_src clojure
+(def a-promise (promise))
+;; => #'user/revenue-promise
+(deref a-promise 500 :oh-snap)
+;; => :oh-snap
+(deliver a-promise "Ola")
+;; => #<Promise@1746c7aa: "Ola">
+(deref a-promise 500 :oh-snap)
+;; => "Ola"
+#+end_src
+---------------------------------------------------------------------------------------------------
+Problem: JVM will refuse to shutdown if there are background threads running:-
+Solution 1: Make sure all threads have finished before shutting down JVM, aka terminating the main thread.
+Solution 2: Mark your threads as daemons. Caution, Daemons will be terminated without warning whenever the main thread terminates.
+
+** In the wild
+
+Compojure routing library usage. (Come back to this after reading the Web development with Clojure book)
+
+~clojure.core/pmap~ is like ~map~ but runs each in a separte thread.
+
+** Wrapping up
+nil
+
 * File Settings
 :PROPERTIES:
 :UNNUMBERED: t
