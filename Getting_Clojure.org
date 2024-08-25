@@ -2503,7 +2503,7 @@ Record instances ~ Objects
 Protocols ~ Abstract Interfaces
 
 Protocols are Clojure's riff on type-based polymorphism
-(Type-based polymorphism definition - the idea that you can have a single operation implemented in different ways by different types.)
+{Type-based polymorphism definition - the idea that you can have a single operation implemented in different ways by different types.}
 
 *But* differences:-
 Unlike objects, Record instances are immutable
@@ -3851,7 +3851,7 @@ Firing off a computation in another thread, then getting its result back through
 There is a prepackaged helper for this pattern:
 ~future~
 
-You can think of a future as a promise that comes with its own thread.
+*You can think of a future as a promise that comes with its own thread.*
 
 #+begin_src clojure
 (def revenue-future (future (apply + (map :revenue inventory))))
@@ -3920,7 +3920,7 @@ Solution 2: Mark your threads as daemons. Caution, Daemons will be terminated wi
 Compojure routing library usage. (Come back to this after reading the Web development with Clojure book)
 
 ~clojure.core/pmap~ is like ~map~ but runs each in a separate thread.
-There is a toy-my-pmap implementation, alongside *important discussion on using ~doall~ to stop the lazyness of ~map~ in its implementation*
+There is a toy-my-pmap implementation which *depicts using ~doall~ to stop the lazyness of ~map~ buitin*
 
 ** Wrapping up
 nil
@@ -4095,6 +4095,362 @@ nil
 
 * Read and Eval
 In the chapter, we learn the reason behind Clojure's lispy0 syntax.
+
+** Homoiconic
+Does Clojure code syntax look a lot similar to its list data syntax.
+Its not a coincidence.
+
+Just some data:
+#+begin_src clojure
+'(helvetica times-roman [comic-sans]
+   (futura gil-sans
+     (courier "All the fonts I have loved!")))
+#+end_src
+
+Still data, because of the quote
+#+begin_src clojure
+'(defn print-greeting [preferred-customer]
+   (if preferred-customer
+     (println "Welcome back!")))
+#+end_src
+
+Now its code
+#+begin_src clojure
+(defn print-greeting [preferred-customer blabla]
+   (if preferred-customer
+     (println "Welcome back!")))
+#+end_src
+
+Clojure code looks like Clojure data because, *Clojure code is data*
+Clojure uses the same syntax and datastructures; to represent code and data.
+
+A Clojure function call ~(println "Hi")~ is an actual Clojure list.
+Function arguments ~[preferred-customer blabla]~ is an actual Clojure vector.
+
+Languages where code is data are called /homoiconic/
+
+** Simple usage of ~read~ and ~eval~
+The machinery used by Clojure to read and evaluate code is surprisingly simple:-
+It consists of just two functions:-
+1. read - kinda boring function
+2. eval - very interesting function
+
+~(read)~ without arguments waits for input from /standard input/.
+#+begin_src clojure
+(read)
+;; => "I_typed_this_into_stdin"
+#+end_src
+
+Let me call ~read~, but type out an actual Clojure function:-
+#+begin_src text
+(defn print-greeting [preferred-customer]
+  (if preferred-customer (println "Welcome back!")))
+#+end_src
+
+#+begin_src clojure
+(read)
+;; => (defn
+;;     print-greeting
+;;     [preferred-customer]
+;;     (if preferred-customer (println "Welcome back!")))
+#+end_src
+What I get is an ordinary 4 element list.
+---------------------------------------------------------------------------------------------------
+~read-string~ is a cousin of ~read~, but accepts input from a string.
+#+begin_src clojure
+(def s "(defn print-greeting [preferred-customer]
+          (if preferred-customer (println \"Welcome back!\")))")
+;; => #'user/s
+
+(read-string s)
+;; => (defn
+;;     print-greeting
+;;     [preferred-customer]
+;;     (if preferred-customer (println "Welcome back!")))
+#+end_src
+This also is an ordinary 4 element list. Nothing special.
+---------------------------------------------------------------------------------------------------
+~eval~ takes the data you pass in, compiles and runs it as clojure code.
+#+begin_src clojure
+(def a-three-element-list '(+ 2 3))
+;; => #'user/a-three-element-list
+(eval a-three-element-list)
+;; => 5
+#+end_src
+
+It eval can define functions too
+#+begin_src clojure
+(print-greeting true)
+;; => Syntax error compiling at (Getting_Clojure.org::Read and Eval:87:1).
+;;    Unable to resolve symbol: print-greeting in this context
+
+(def some-list-data '(defn print-greeting [preferred-customer]
+                       (if preferred-customer (println "Welcome back!"))))
+;; => #'user/some-list-data
+
+(eval some-list-data)
+;; => #'user/print-greeting
+
+;;Now the function is defined
+(print-greeting true)                   ;does print to repl
+;; => nil
+#+end_src
+---------------------------------------------------------------------------------------------------
+Numbers, Strings, Keywords evaluate to themselves
+#+begin_src clojure
+(eval 55)
+;; => 55
+(eval "Hello")
+;; => "Hello"
+(eval :Hello)
+;; => :Hello
+#+end_src
+
+What happens when you /evaluate symbols/:-
+#+begin_src clojure
+(def title "Alice in Wonderland")
+;; => #'user/title
+
+;;Get hold of its symbol
+(def the-symbol 'title)
+;; => #'user/the-symbol
+
+(eval the-symbol)
+;; => "Alice in Wonderland"
+#+end_src
+?So, eval-ing a symbol gives me the value associated with it.
+
+What happens when you /evaluate lists/:-
+#+begin_src clojure
+(eval '(count "Anoop"))
+;; => 5
+#+end_src
+So, eval-ing a list is equivalent to a function call.
+where first element of the list the function and the rest of the elements are the arguments.
+
+Therefore, below is results in an error as =1= isnt a function
+#+begin_src clojure
+(eval '(1 2 3))
+;; => Execution error (ClassCastException) at user/eval10394 (REPL:138).
+;;    class java.lang.Long cannot be cast to class clojure.lang.IFn (java.lang.Long is in module java.base of loader 'bootstrap'; clojure.lang.IFn is in unnamed module of loader 'app')
+#+end_src
+---------------------------------------------------------------------------------------------------
+So eval kinda runs stuff.
+*But more importantly, it accepts ordinary clojure lists, vectors, keywords and symbols as its input*
+One more example where this is more explicitly depicted:-
+#+begin_src clojure
+(def fn-name 'print-greeting)
+;; => #'user/fn-name
+(def args (vector 'preferred-customer))
+;; => #'user/args
+(def the-println (list 'println "Welcome back!"))
+;; => #'user/the-println
+(def body (list 'if 'preferred-customer the-println))
+;; => #'user/body
+(eval (list 'defn fn-name args body))
+;; => #'user/print-greeting
+(eval (list 'print-greeting true))      ;does print
+;; => nil
+#+end_src
+Notice that there is no quotation in front of =the-println= when def-ing =body=
+
+** Homoiconic Advantage
+Clojure's syntax is the way it is because it balances between:-
+1. ease of representing code
+2. ease of representing data
+
+Since code is data,
+reading source code is as easy as slurping ordinary clojure lists.
+
+Eg:-
+Lets write a function that can read a file containing clojure code and turn it into a vector
+#+begin_src clojure
+(ns codetool.core
+  (:require [clojure.java.io :as io]))
+;; => nil
+(defn read-source [path]
+  (with-open [r (java.io.PushbackReader. (io/reader path))]
+    (loop [result []]
+      (let [expr (read r false :eof)]
+        (if (= expr :eof)
+          result
+          (recur (conj result expr)))))))
+;; => #'codetool.core/read-source
+#+end_src
+
+Lets create a test input file
+#+begin_src text :tangle ./test.clj
+(defn print-greeting [preferred-customer]
+  (if preferred-customer (println "Welcome back, this time from file!")))
+#+end_src
+
+#+begin_src clojure
+(read-source "./test.clj")
+;; => [(defn
+;;      print-greeting
+;;      [preferred-customer]
+;;      (if
+;;       preferred-customer
+;;       (println "Welcome back, this time from file!")))]
+#+end_src
+
+Notice that ~read~ slurped an entire sexp in a single read operation.
+In other words, the loop ran only once for my input.
+
+Notice ~(read r false :eof)~ line shows how ~read~ accepts parameters.
+
+---------------------------------------------------------------------------------------------------
+Now we have all the tools needed to write our own REPL
+#+begin_src clojure
+(defn my-repl []
+  (loop []
+    (println (eval (read)))
+    (recur)))
+#+end_src
+
+** An ~eval~ of your own
+Try 1.0
+#+begin_src clojure
+(defn my-eval [expr]
+  (cond (string? expr) expr
+        (keyword? expr) expr
+        (number? expr) expr
+        :else :completely-confused))
+#+end_src
+---------------------------------------------------------------------------------------------------
+Try 2.0
+Lets improve it to handle more cases
+#+begin_src clojure
+(declare eval-symbol)
+;; => #'codetool.core/eval-symbol
+(declare eval-vector)
+;; => #'codetool.core/eval-vector
+(declare eval-list)
+;; => #'codetool.core/eval-list
+
+(defn my-eval [expr]
+  (cond (string? expr) expr
+        (keyword? expr) expr
+        (number? expr) expr
+        (symbol? expr) (eval-symbol expr)
+        (vector? expr) (eval-vector expr)
+        (list? expr) (eval-list expr)
+        :else :completely-confused))
+;; => #'codetool.core/my-eval
+#+end_src
+
+For symbols, we can look them up in the current namespace
+#+begin_src clojure
+(defn eval-symbol [expr]
+  (.get (ns-resolve *ns* expr)))
+#+end_src
+
+For  vectors, we can recursively evaluate its elements
+#+begin_src clojure
+(defn eval-vector [expr]
+  (vec (map my-eval expr)))
+;; => #'codetool.core/eval-vector
+#+end_src
+
+*For lists, my-eval must recurse and also invoke a final function call*
+Recall that we did learn in previous section that eval treats lists as function call.
+#+begin_src clojure
+(defn eval-list [expr]
+  (let [evaled-items (map my-eval expr)
+        f (first evaled-items)
+        args (rest evaled-items)]
+    (apply f args)))
+;; => #'user/eval-list
+#+end_src
+
+Building your own eval amounts to building your own lisp.
+I think even PG has his own version of eval in his /Roots of Lisp/ essay.
+
+** In the wild
+Look into doing MAL - Make a Lisp (skipped for now)
+(Maybe I can try building clojure using C)
+---------------------------------------------------------------------------------------------------
+Metadata is code that you type out.
+But, Metadata is actually just a map.
+=^:some_keyword= is syntactic sugar for attaching metadata
+#+begin_src clojure
+(def books1 (with-meta ["Emma" "1984"] {:favorite-books true}))
+;; => #'user/books1
+(def books2 ^:favorite-books ["Emma" "1984"])
+;; => #'user/books2
+#+end_src
+
+Fetch the metadata
+#+begin_src clojure
+(meta books1)
+;; => {:favorite-books true}
+(meta books2)
+;; => {:favorite-books true}
+#+end_src
+
+The metadata that we typed out as code is a plain map:-
+#+begin_src clojure
+(def m (meta books1))
+;; => #'user/m
+(class m)
+;; => clojure.lang.PersistentArrayMap
+(count m)
+;; => 1
+(keys m)
+;; => (:favorite-books)
+(vals m)
+;; => (true)
+#+end_src
+---------------------------------------------------------------------------------------------------
+Aside-1: *Equal values are still equal values even if they have different metadata*
+#+begin_src clojure
+(def books3 (with-meta ["Emma" "1984"] {:hated-old-books true}))
+;; => #'user/books3
+(= books1 books3)
+;; => true
+#+end_src
+---------------------------------------------------------------------------------------------------
+Aside-2:-
+The function docstring is slurped into the metadata map of the function
+
+** Staying out of trouble
+Dont ever use *eval* as a beginner.
+1. eval is inefficent, because it calls to the Clojure compile machinery during runtime
+2. eval has wierd corner-cases
+
+Reserve ~eval~ for those 0.01% cases when you have no idea what runtime code you want to execute until some runtime data tells you.
+---------------------------------------------------------------------------------------------------
+*Unlike ~eval~, ~read~ is frequently useful in Clojure programs you write*
+
+When reading data from untrusted source, use ~edn/read~
+because ordinary ~read~ sometimes executes code while it reads.
+#+begin_src clojure
+(def s "#=(println \"Good Morning\")")
+;; => #'user/s
+(read-string s)                         ;also results in unexpected side effect, print out
+;; => nil
+s
+;; => "#=(println \"Good Morning\")"
+#+end_src
+
+Fix:-
+#+begin_src clojure
+(require '[clojure.edn :as edn])
+;; => nil
+(def untrusted (edn/read))
+;; => #'user/untrusted
+untrusted
+;; => "#=(println \"Good Morning\")"
+#+end_src
+---------------------------------------------------------------------------------------------------
+The wierd syntax benefits use because of:-
+1. ability to read code as data using ~read~
+2. ability to evaluate data as code using ~eval~
+3. macros
+
+** Wrapping up
+nil
+* Macros
 
 * File Settings
 :PROPERTIES:
