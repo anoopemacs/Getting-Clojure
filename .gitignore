@@ -4,3 +4,6 @@
 !Getting_Clojure.org
 # and this file itself
 !.gitignore
+!*.svg
+!*.xopp
+!*.png
