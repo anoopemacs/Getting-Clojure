@@ -4798,7 +4798,8 @@ ie there is no reason why ~describe-it~ couldnt be a simple function.
 First preference: Try to solve a problem with ordinary function
 Second preference: You are writing a lot of repetitive code, go for a macro
 Third preference (rare 0.01% case): Turn data directly into code, go for ~eval~ from previous chapter.
-
+* Conclusion
+nil
 * File Settings
 :PROPERTIES:
 :UNNUMBERED: t
