@@ -3919,6 +3919,7 @@ Solution 2: Mark your threads as daemons. Caution, Daemons will be terminated wi
 ** In the wild
 
 Compojure routing library usage. (Come back to this after reading the Web development with Clojure book)
+TODO: "The second thing to note is how this code, from top to bottom, is completely devoid of any /Oh, gee, I'm working in a multithreaded application!/ special pleading."
 
 ~clojure.core/pmap~ is like ~map~ but runs each in a separate thread.
 There is a toy-my-pmap implementation which *depicts using ~doall~ to stop the lazyness of ~map~ buitin*
