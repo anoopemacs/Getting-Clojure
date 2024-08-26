@@ -3801,6 +3801,7 @@ Henceforth, ~a-promise~ continues to carry the value "Bla bla bla"
 (identity @a-promise)
 ;; => "Bla bla bla"
 #+end_src
+^Aside: I resort to using the identity function because, if not, =C-x C-e= mechanism gets confused.
 
 *Important feature of a promise*
 A deref or @ will pause until there is a value.
@@ -4443,7 +4444,7 @@ untrusted
 ;; => "#=(println \"Good Morning\")"
 #+end_src
 ---------------------------------------------------------------------------------------------------
-The wierd syntax benefits use because of:-
+The weird syntax benefits use because of:-
 1. ability to read code as data using ~read~
 2. ability to evaluate data as code using ~eval~
 3. macros
@@ -4451,6 +4452,352 @@ The wierd syntax benefits use because of:-
 ** Wrapping up
 nil
 * Macros
+Macros help keep code concise, at the lowest levels of architecture.
+
+** Wont Functions suffice? Why Macros? Lets explore through an example
+Eg:-
+A book has a rating between, say [-10, 10]
+We want to convert the rating into a string using a simple algorithm and print it.
+#+begin_src clojure
+(defn print-rating [rating]
+  (cond (pos? rating) (println "Good book!")
+        (zero? rating) (println "Totally indifferent.")
+        :else (println "Run away!")))
+;; => #'user/print-rating
+#+end_src
+
+Lets assume that we keep finding many such instances of three pronged ~cond~-s in our codebase, all forking at /rating/
+How can we capture this repetitive pattern.
+---------------------------------------------------------------------------------------------------
+Try-1 (fail):-
+Through a function
+#+begin_src clojure
+(defn arithmetic-if [rating pos zero neg]
+  (cond (pos? rating) pos
+        (zero? rating) zero
+        :else neg))
+;; => #'user/arithmetic-if
+
+(defn print-rating [rating]
+  (arithmetic-if rating (println "Good book!") (println "Totally indifferent.") (println "Run away!")))
+;; => #'user/print-rating
+#+end_src
+
+We immediately run into problems,
+above version prints all three arguments, for all inputs.
+This version of ~print-rating~ *only* when arguments to ~arithmetic-if~ dont have any side effects.
+
+ie, above is equivalent to ~(arithmetic-if rating nil nil nil)~
+
+The rules of Clojure say that the arguments to a function will get evaluated first, and then the function body. (Look into SICP for more details on this.)
+---------------------------------------------------------------------------------------------------
+Try-2:-
+Through a function, and making its arguments functions too. So that the arguments wont get evaluated.
+#+begin_src clojure
+(defn arithmetic-if [rating pos-f zero-f neg-f]
+  (cond (pos? rating) (pos-f)
+        (zero? rating) (zero-f)
+        :else (neg-f)))
+;; => #'user/arithmetic-if
+(defn print-rating [rating]
+  (arithmetic-if rating #(println "Good book!") #(println "Totally indifferent.") #(println "Run away!")))
+;; => #'user/print-rating
+#+end_src
+This works. But its kinda odd. Even to return a constant, you have to wrap it in a function.
+
+
+** Macros - built using code and without using backquote template
+*** Some motivation for why macros are a distinct entity from functions
+Lets look at what we are trying to accomplish from a different perspective:-
+
+Desired syntax:- aka This is the starting form of the code:-
+#+begin_src clojure
+(arithmetic-if rating
+  (println "Good book!")
+  (println "Totally indifferent.")
+  (println "Run away!"))
+#+end_src
+
+The final form of the code:-
+#+begin_src clojure
+(cond (pos? rating) (println "Good book!")
+      (zero? rating) (println "Totally indifferent.")
+      :else (println "Run away!"))
+#+end_src
+
+Lets ask ourselves the question, if form-A was  data,
+what function would turn it into form-B:-
+#+begin_src clojure
+(defn arithmetic-if->cond [r pos zero neg]
+  (list 'cond
+        (list 'pos? r) pos
+        (list 'zero? r) zero
+        :else neg))
+;; => #'user/arithmetic-if->cond
+
+(arithmetic-if->cond 'rating
+                     '(println "Good book!")
+                     '(println "Totally indifferent.")
+                     '(println "Run away!"))
+;; => (cond
+;;     (pos? rating)
+;;     (println "Good book!")
+;;     (zero? rating)
+;;     (println "Totally indifferent.")
+;;     :else
+;;     (println "Run away!"))
+#+end_src
+Above works.
+We want some way of inserting the above function into the Clojure compiler.
+ie
+Just before compiling, run the above on some code.
+For this, we need compile time macros. (Aside doubt: how are they different from runtime macros)
+
+*** Our first macro, doesnt use backquote template
+#+begin_src clojure
+(defmacro arithmetic-if [r pos zero neg]
+  (list 'cond
+        (list 'pos? r) pos
+        (list 'zero? r) zero
+        :else neg))
+;; => #'user/arithmetic-if
+#+end_src
+Notice that the body of this macro and the above function are exactly the same.
+ie
+Macros are just functions, special only in when they run. They run as part of the compilation process, just before compilation, but after reading.
+[[xournalpp:when macros run.xopp]]
+
+Usage
+#+begin_src clojure
+(arithmetic-if 10 :loved-it :meh :hated-it)
+;; => :loved-it
+#+end_src
+
+*** When are macro arguments evaluated
+#+begin_src clojure :results output
+(defmacro print-it [something]
+  (list 'println "Something is" something))
+;; => #'user/print-it
+(print-it (+ 10 20))
+#+end_src
+
+#+RESULTS:
+: Something is 30
+
+Refer to above diagram:-
+The arithmetic expression ~(+ 10 20)~ *did not* get evaluated during read step.
+It *did not* get evaluated during macro-expansion step.
+It *did* get evaluated during runtime. Specifically, during ~list~ function's runtime.
+
+** Macros built using backquote template, aka syntax quoting
+Clojure code templating system involves:-
+backquote ~`~
+tilde ~~~
+BTW, such templates are just plain clojure lists and vectors and maps.
+
+#+begin_src clojure
+(identity `(:my :first "template" :list 1 2 3))
+;; => (:my :first "template" :list 1 2 3)
+#+end_src
+
+#+begin_src clojure
+(def r 9)
+;; => #'user/r
+(def pos "It's positive!")
+;; => #'user/pos
+(def zero "It's zero!")
+;; => #'user/zero
+(def neg "It's negative")
+;; => #'user/neg
+
+(identity
+  `(cond (pos? ~r) ~pos
+         (zero? ~r) ~zero
+         :else ~neg))
+;; => (clojure.core/cond
+;;     (clojure.core/pos? 9)
+;;     "It's positive!"
+;;     (clojure.core/zero? 9)
+;;     "It's zero!"
+;;     :else
+;;     "It's negative")
+#+end_src
+This is so much more readable.
+
+Notice that syntax quoting uses fully qualified symbols.
+*** TODO why? (Doubt)
+?Because, at runtime, we may be in a different environment, than during the compile time.
+ie, is ~pos?~ the one defined in the context where the macro was defined (ie before /read/ step)
+or
+is ~pos?~ the one defined in the context where the macro was called. (ie during ?)
+
+Law of least surprises dictates that the macro writer intended to use the same ~pos?~ as the one that was available to him while writing that macro.
+---------------------------------------------------------------------------------------------------
+
+#+begin_quote https://blog.janetacarr.com/a-primer-on-clojure-macros/#:~:text=%20we%20have%20to%20fully%20qualify%20our%20symbols%20in%20macros%20because%20namespace%20aliases%20don't%20exist%20to%20the%20reader.
+We have to fully qualify our symbols in macros because namespace aliases don't exist to the reader.
+#+end_quote
+*** Using syntax quoting to improve ~arithmetic-if~
+#+begin_src clojure
+(defmacro arithmetic-if [r pos zero neg]
+  `(cond (pos? ~r) ~pos
+         (zero? ~r) ~zero
+         :else ~neg))
+#+end_src
+** In the wild
+Although you may not be writing too many macros as a beginner,
+since macros are extensively used by others,
+you will definitely encounter them.
+
+Clojure builtins ~when~, ~cond~, ~and~, ~defn~ are all macros
+
+*** The ~~@~ symbol represents unquote and splice
+Lets try to define our own ~defn~
+#+begin_src clojure
+(defmacro my-defn [sym args & body]
+  `(def ~sym (fn ~args ~body)))
+;; => #'user/my-defn
+#+end_src
+
+Try it
+#+begin_src clojure
+(my-defn hello [name]
+  (println "Entered hello function")
+  (str "Hello " name))
+;; => #'user/hello
+
+(hello "Anoop")
+;; => Execution error (NullPointerException) at user/hello (REPL:211).
+;;    Cannot invoke "clojure.lang.IFn.invoke(Object)" because the return value of "clojure.lang.IFn.invoke(Object)" is null
+#+end_src
+
+What is happening is /body/ is  =((println "Entered hello function") (str "Hello " name))= with an extra pair of parenthesis.
+We want to get rid of that parenthesis, and splice its contents while unquoting:- use ~~@~
+#+begin_src clojure
+(defmacro my-defn [sym args & body]
+  `(def ~sym (fn ~args ~@body)))
+;; => #'user/my-defn
+
+(my-defn hello [name]
+  (println "Entered hello function")
+  (str "Hello " name))
+;; => #'user/hello
+
+(hello "Anoop")
+;; => "Hello Anoop"
+#+end_src
+
+*** TODO The hash symbol ~#~ for gensyms
+Builtin ~and~ definition:-
+#+begin_src clojure
+(defmacro and
+  ([] true)
+  ([x] x)
+  ([x & nxt]
+   `(let [and# ~x]
+      (if and# (and ~@next) and#))))
+#+end_src
+The hash symbol generates unique symbols /?to avoid namespace collisions/ :-
+#+begin_src clojure
+(identity `(and))
+;; => (clojure.core/and)
+(identity `(and#))
+;; => (and__10087__auto__)
+#+end_src
+Still have some doubts. I need to find a better example that illustrates the need for ~#~
+
+** Staying out of trouble
+
+*** A nice example that illustrates what happens when in a macro
+#+begin_src clojure :results output
+(defmacro illustrate-timing []
+  (println "This happens at A? time")
+  `(println "This happens at B? time"))
+;; => #'user/illustrate-timing
+
+(def foo-uses-that-macro #(illustrate-timing))
+;; => #'user/foo-uses-that-macro
+#+end_src
+
+#+RESULTS:
+: This happens at A? time
+#+begin_src clojure :results output
+(foo-uses-that-macro)
+#+end_src
+
+#+RESULTS:
+: This happens at B? time
+
+A=macro-expansion time
+B=runtime
+
+*ie Macros make themselve felt at two distinct times*:
+directly at macro-expansion time,
+indirectly at runtime.
+
+*** ~macroexpand-1~
+Since macros are only indirectly present at runtime,
+macro names are not visible in stacktraces.
+
+#+begin_src clojure
+(arithmetic-if 9
+  (/ 1 0)
+  (/ 1 0)
+  (/ 1 0))
+;; => Execution error (ArithmeticException) at user/eval10157 (REPL:291).
+;;    Divide by zero
+#+end_src
+The stack trace:-
+#+begin_src txt
+              Numbers.java:  190  clojure.lang.Numbers/divide
+              Numbers.java: 3911  clojure.lang.Numbers/divide
+                      REPL:  291  user/eval10157
+                      REPL:  290  user/eval10157
+             Compiler.java: 7194  clojure.lang.Compiler/eval
+    interruptible_eval.clj:  106  nrepl.middleware.interruptible-eval/evaluator/run/fn
+    interruptible_eval.clj:  101  nrepl.middleware.interruptible-eval/evaluator/run
+               session.clj:  229  nrepl.middleware.session/session-exec/session-loop
+        SessionThread.java:   21  nrepl.SessionThread/run
+#+end_src
+
+So macros are hard to debug.
+There is a helper to try out macros and debug them:-
+#+begin_src clojure
+(macroexpand-1 '(arithmetic-if 9
+                  (/ 1 0)
+                  (/ 1 0)
+                  (/ 1 0)))
+;; => (cond (pos? 9) (/ 1 0) (zero? 9) (/ 1 0) :else (/ 1 0))
+#+end_src
+
+*** You cant pass macros into a higher order function
+
+Eg:-
+#+begin_src clojure
+(defmacro describe-it [it]
+  `(let [value# ~it]
+     (cond (list? value#) :a-list
+           (vector? value#) :a-vector
+           (number? value#) :a-number
+           :else :no-idea)))
+;; => #'user/describe-it
+#+end_src
+
+You cannot use it as an argument to ~map~
+#+begin_src clojure
+(map describe-it [10 "Anup" [1 2 3]])
+;; => Syntax error compiling at (Getting_Clojure.org::Macros:337:1).
+;;    Can't take value of a macro: #'user/describe-it
+#+end_src
+
+The solution is simple.
+In such cases, most probably, a simple function suffices and you have over-reached for a macro.
+ie there is no reason why ~describe-it~ couldnt be a simple function.
+
+** Wrapping up
+First preference: Try to solve a problem with ordinary function
+Second preference: You are writing a lot of repetitive code, go for a macro
+Third preference (rare 0.01% case): Turn data directly into code, go for ~eval~ from previous chapter.
 
 * File Settings
 :PROPERTIES:
