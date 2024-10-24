@@ -2052,15 +2052,7 @@ nREPL
 Further processing is now easy. Because Clojure has a rich library of seq builtins.
 
 ?Visualize above design pattern:-
-Look at ".model a stream of side effects as a lazy seq.svg" file in the current folder.
-
-Bug:-
-[//[file:.model a stream of side effects as a lazy seq.svg]//] hangs emacs! (if you uncomment it and enable inline images)
-Hence, wasnt able to display above xopp file using ~org-xournal-redisplay-images~
-The svg file isnt corrupted, because it opens properly in Google Chrome.
-
-Workaround:- Manually exported to png and inserted below
-[[file:model a stream of side effects as a lazy seq.png]]
+[[xournalpp:model a stream of side effects as a lazy seq.xopp]]
 
 Lazy sequences are /very very/ common in Clojure.
 Only a few exceptions are not-lazy aka eager:- ~count~
