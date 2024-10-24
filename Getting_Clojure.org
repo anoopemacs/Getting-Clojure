@@ -40,6 +40,8 @@ Aside, Official docs:-
 
 *prefix* notation
 ~(<verb> arg1 arg2 ...)~
+** Comments
+~#_~ can be used to comment out a sexp.
 ** def
 #+begin_src clojure
 (def first-name "Russ")
@@ -317,6 +319,7 @@ In general, clojure softwares are typically:- maps go in -> maps come out
 ;; => Execution error (FileNotFoundException) at user/eval10431 (REPL:112).
 ;;    Could not locate clojure/java/jdbc__init.class, clojure/java/jdbc.clj or clojure/java/jdbc.cljc on classpath.
 #+end_src
+^TODO couldnt try out the first example because I havent yet learn how to install external library. Come back to this later.
 
 Membership test using literal set
 #+begin_src clojure
@@ -1168,7 +1171,7 @@ What these^ =var= looks like:-
 ;; => #'user/author
 
 ;;Get above created var:-
-#'author
+#'author                                ;?Doubt: is this syntactic sugar for (var author)
 ;; => #'user/author
 
 (def the-var #'author)
@@ -1744,7 +1747,8 @@ Notice that =#(= is used for function literals whereas =#"= is used for regular 
 Overtone
 Clojurescript
 
-~-->>~ syntactic sugar places each step of computation at the end
+~->>~ syntactic sugar places each step of computation at the end
+ie it becomes the last argument
 #+begin_src clojure
 books
 ;; => [{:title "Deep Six", :price 13.99, :genre :sci-fi, :rating 6}
@@ -1774,7 +1778,9 @@ books
 ;; => "Emma // Dracula // Deep Six"
 #+end_src
 
-~->~ syntactic sugar places it (each step of computation) at the begining
+~->~ syntactic sugar places it (each step of computation) at the front of the argument list.
+ie, it becomes the first argument.
+Aside, for nested properties, there is a sister syntactic sugar, double dot, Eg:-  ~(.. event -target -value)~
 ** Staying out of trouble
 Avoid processing sequence items one at a time. Its a Clojure antipattern.
 Eg: ~for~ is seldom used by Clojurists, they prefer ~map~
@@ -2311,7 +2317,7 @@ Destructuring is soo  much better than ~first~-ing , ~rest~-ing, nth-ing till yo
 Records are +like+ maps, but specialized for a particular purpose.
 
 ** Two troubles with Maps
-1. any key with any value, this flexibility => slow cod
+1. any key with any value, this flexibility => slow code
 2. lack of coherence and documentation, Eg: A map name =watson= could be either of a fictional character or a supercomputer.
 
 ** How to create a Record
